@@ -1,17 +1,10 @@
-<h1>Welcome to {{APP_NAME}}</h1>
-<p>セットアップが完了しました。</p>
+<h1>Welcome to My Project</h1>
 
 <div style="margin-top: 2rem;">
     <?php if (Auth::check()): ?>
-        <p>Logged in as: <strong><?= h(Auth::user()->name) ?></strong></p>
         <a href="<?= Url::get('dashboard') ?>" style="display: inline-block; padding: 0.5rem 1rem; background: #007bff; color: #fff; text-decoration: none; border-radius: 4px;">Go to Dashboard</a>
-        <a href="<?= Url::get('logout') ?>" style="margin-left: 1rem;">Logout</a>
     <?php else: ?>
         <p>Simple Auth Demo (ID: admin / PW: password)</p>
         <a href="<?= Url::get('login') ?>" style="display: inline-block; padding: 0.5rem 1rem; background: #28a745; color: #fff; text-decoration: none; border-radius: 4px;">Login Demo</a>
     <?php endif; ?>
-</div>
-
-<div style="margin-top: 3rem; color: #888; font-size: 0.9rem; border-top: 1px solid #eee; padding-top: 1rem;">
-    <p>このページは <code>IndexController</code> によって制御されています。</p>
 </div>

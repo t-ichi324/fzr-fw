@@ -1,0 +1,10 @@
+<?php
+$msg = Message::get();
+if ($msg) {
+?>
+    <div class="alert alert-<?= h($msg['type']) ?>">
+        <?= h($msg['message']) ?>
+    </div>
+<?php
+}
+?>

@@ -36,7 +36,7 @@ class IndexController extends Controller
     public function _post_login()
     {
         // Use Form for easy validation
-        $form = Form::fromPost();
+        $form = Form::fromRequest();
         $form->rule('id', 'ID')->required();
         $form->rule('password', 'Password')->required();
 

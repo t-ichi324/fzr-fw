@@ -273,6 +273,9 @@ class Response
         }
         self::callHook(self::$before);
         self::setHeader("Location", Url::get($url));
+        // Persist any in-memory flash messages to the session before
+        // sendHeaders() closes the session for writes.
+        Message::toFlash();
         self::sendHeaders();
         self::callHook(self::$after);
         self::terminate();

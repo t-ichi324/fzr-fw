@@ -71,6 +71,11 @@ class Session extends Store
         ]);
         session_start();
         self::$started = true;
+
+        // Lift prior-request flash messages out of session storage into
+        // request-scoped memory while the session is still writable.
+        // See Message class docblock for the full lifecycle.
+        Message::snapshot();
     }
 
     // ── Cookie セッションハンドラー ────────────────────────────────
