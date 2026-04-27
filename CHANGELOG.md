@@ -3,9 +3,15 @@
 ## [Unreleased]
 
 ### Changed
-- **バリデーションルールの命名簡略化**: `MinLength` / `MaxLength` を `Min` / `Max` へ改称。
-    - `FormValidator`: `minLength()` -> `min()`, `maxLength()` -> `max()`
-    - Attributes: `#[MinLength]` -> `#[Min]`, `#[MaxLength]` -> `#[Max]`
+- **Form: 入力値の自動 Trim 機能を導入**:
+    - `Form` へのデータバインド時に文字列の前後スペースを自動で削除。
+    - パスワード関連のフィールドもコピペミス防止のため Trim 対象に含めるよう変更。
+    - 再帰的な処理により、ネストされた配列データにも対応。
+- **バリデーションルールの命名整理**:
+    - 文字列長: `MinLength` / `MaxLength` を `Min` / `Max` へ短縮。
+    - 数値大小: `minValue` / `maxValue` を新設。
+    - `FormValidator`: `min()`, `max()`, `minValue()`, `maxValue()` メソッドを整備。
+    - Attributes: `#[Min]`, `#[Max]`, `#[MinValue]`, `#[MaxValue]` を整備。
     - エラーメッセージのプレースホルダーを `:len` から `:min` / `:max` へ変更。
 - **プロジェクト構成の再整理**: フレームワーク本体を `fzr/fw` ディレクトリへ配置。`fzr/kit` (旧 `php-libs`) と共に `fzr` ブランドのモノレポ風構成に統合。
 

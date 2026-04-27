@@ -50,7 +50,28 @@ class Form extends Bag
                 $this->data = array_merge($_GET, $_POST);
             }
         }
+        $this->data = $this->trimData($this->data);
         $this->csrfToken = Security::getCsrfToken();
+    }
+
+    /** データをバインドする（文字列は自動で trim） */
+    public function bind(mixed $source): static
+    {
+        $data = is_object($source) ? (array)$source : ($source ?? []);
+        $this->data = $this->trimData($data);
+        return $this;
+    }
+
+    protected function trimData(array $data): array
+    {
+        foreach ($data as $key => $value) {
+            if (is_string($value)) {
+                $data[$key] = trim($value);
+            } elseif (is_array($value)) {
+                $data[$key] = $this->trimData($value);
+            }
+        }
+        return $data;
     }
 
     public function bindModel(Model $model, array $ignore = []): self
