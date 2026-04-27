@@ -1,0 +1,335 @@
+<?php
+
+use Fzr\Tracer;
+use Fzr\Context;
+
+if (!Tracer::isEnabled() || Context::isApi()) return;
+
+$events = Tracer::getAll();
+$totalTime = round(Context::elapsed() * 1000, 2);
+$totalMem  = round(memory_get_peak_usage() / 1024 / 1024, 2);
+
+$byCategory = ['error' => [], 'timeline' => [], 'db' => [], 'log' => [], 'cache' => []];
+foreach ($events as $e) {
+    if ($e['category'] === 'log' && in_array($e['data']['level'] ?? '', ['error', 'exception', 'db-error'])) {
+        $byCategory['error'][] = $e;
+    }
+    if (isset($byCategory[$e['category']])) $byCategory[$e['category']][] = $e;
+    else $byCategory['timeline'][] = $e;
+}
+
+$hasError = !empty($byCategory['error']);
+
+$sysInfo = [
+    'Mode'     => Context::isStateless() ? 'Stateless (Cloud)' : 'Persistent (Local)',
+    'Storage'  => Env::get('storage.driver', 'local') . ' (' . Env::get('storage.default_disk', 'default') . ')',
+    'Session'  => ini_get('session.save_handler') . (isset($_COOKIE[session_name()]) ? ' [Cookie Active]' : ''),
+    'Database' => Env::get('db.driver', 'none') . ' (' . (Env::get('db.host') ?: Env::get('db.database', 'N/A')) . ')',
+    'Server'   => $_SERVER['SERVER_SOFTWARE'] ?? 'Unknown',
+    'Host'     => $_SERVER['HTTP_HOST'] ?? 'localhost',
+    'Client'   => $_SERVER['REMOTE_ADDR'] ?? 'Unknown',
+    'PHP'      => PHP_VERSION . ' (' . PHP_SAPI . ')',
+];
+
+$isError = Response::getStatusCode() >= 400;
+$status = Response::getStatusCode();
+$toggleBg = $isError ? '#d73a49' : '#1a202c';
+$toggleLabel = $isError ? "ERROR: {$status} ({$totalTime}ms)" : "DEBUG: {$totalTime}ms";
+?>
+<style>
+    #fzr-tracer-bar {
+        position: fixed;
+        bottom: 0;
+        right: 0;
+        z-index: 1000000;
+        font-family: SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
+        font-size: 11px;
+    }
+
+    #fzr-tracer-toggle {
+        background: <?= $toggleBg ?>;
+        color: #fff;
+        padding: 4px 10px;
+        cursor: pointer;
+        border-radius: 4px 0 0 0;
+        opacity: 0.9;
+    }
+
+    #fzr-tracer-toggle:hover { opacity: 1; }
+
+    #fzr-tracer-panel {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        height: 40vh;
+        background: #fff;
+        border-top: 2px solid #333;
+        z-index: 999999;
+        display: none;
+        flex-direction: column;
+        box-shadow: 0 -5px 15px rgba(0,0,0,0.1);
+        color: #333;
+    }
+
+    #fzr-tracer-panel.open { display: flex; }
+
+    #fzr-tracer-header {
+        background: #1a202c;
+        color: #fff;
+        padding: 6px 15px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    #fzr-tracer-header .brand {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-weight: bold;
+    }
+
+    #fzr-tracer-header .stats {
+        display: flex;
+        gap: 15px;
+        font-size: 11px;
+        color: #a0aec0;
+    }
+
+    #fzr-tracer-header .stats b { color: #fff; }
+
+    .fzr-tracer-tabs {
+        display: flex;
+        background: #f1f5f9;
+        padding: 0 10px;
+        border-bottom: 1px solid #e2e8f0;
+    }
+
+    .fzr-tracer-tab {
+        padding: 8px 15px;
+        cursor: pointer;
+        border-bottom: 2px solid transparent;
+        color: #666;
+    }
+
+    .fzr-tracer-tab.active {
+        background: #fff;
+        color: #000;
+        border-bottom: 2px solid #333;
+    }
+
+    #fzr-tracer-body {
+        flex: 1;
+        overflow: auto;
+        padding: 10px;
+    }
+
+    .fzr-tracer-content { display: none; }
+    .fzr-tracer-content.active { display: block; }
+
+    .fzr-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    .fzr-table th, .fzr-table td { text-align: left; padding: 6px; border: 1px solid #eee; }
+    .fzr-table th { background: #f1f1f1; }
+    .fzr-table tr:hover { background: #fafafa; }
+
+    .fzr-badge { font-weight: bold; font-size: 10px; padding: 1px 4px; border-radius: 2px; text-transform: uppercase; }
+    .fzr-badge-db { color: #6f42c1; }
+    .fzr-badge-log { color: #d73a49; }
+    .fzr-badge-cache { color: #28a745; }
+
+    pre.fzr-code {
+        background: #f6f8fa;
+        padding: 8px;
+        border-radius: 3px;
+        margin: 0;
+        font-family: inherit;
+        white-space: pre-wrap;
+        word-break: break-all;
+    }
+</style>
+
+<div id="fzr-tracer-bar">
+    <div id="fzr-tracer-toggle"><?= h($toggleLabel) ?></div>
+</div>
+
+<div id="fzr-tracer-panel">
+    <div id="fzr-tracer-header">
+        <div class="brand">
+            <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round" style="color:#63b3ed;">
+                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+            </svg>
+            <span><?= $isError ? 'Fzr Error Tracer' : 'Fzr Tracer' ?></span>
+        </div>
+        <div class="stats">
+            <span>Time <b><?= round(Context::elapsed() * 1000, 2) ?> ms</b></span>
+            <span>Memory <b><?= $totalMem ?> MB</b></span>
+        </div>
+        <div id="fzr-tracer-close" style="cursor:pointer; font-size:16px; font-weight:bold;">&times;</div>
+    </div>
+    <div class="fzr-tracer-tabs">
+        <?php if ($hasError): ?>
+        <div class="fzr-tracer-tab" data-tab="error" style="color:#e53e3e; font-weight:bold;">Error (<?= count($byCategory['error']) ?>)</div>
+        <?php endif; ?>
+        <div class="fzr-tracer-tab active" data-tab="timeline">Timeline (<?= count($events) ?>)</div>
+        <div class="fzr-tracer-tab" data-tab="db">Query (<?= count($byCategory['db']) ?>)</div>
+        <div class="fzr-tracer-tab" data-tab="log">Logs (<?= count($byCategory['log']) ?>)</div>
+        <div class="fzr-tracer-tab" data-tab="cache">Cache (<?= count($byCategory['cache']) ?>)</div>
+        <div class="fzr-tracer-tab" data-tab="request">Request</div>
+        <div class="fzr-tracer-tab" data-tab="system">System</div>
+    </div>
+    <div id="fzr-tracer-body">
+        <div class="fzr-tracer-content" id="fzr-tab-error" style="text-align:left;">
+            <?php if (empty($byCategory['error'])): ?>
+                <p>No explicit errors recorded.</p>
+            <?php else: ?>
+                <?php foreach ($byCategory['error'] as $e): ?>
+                    <div style="background:#fff5f5; border-left:4px solid #e53e3e; padding:10px; margin-bottom:10px; font-size:12px;">
+                        <div style="font-weight:bold; color:#c53030; margin-bottom:5px;"><?= h($e['message']) ?></div>
+                        <?php if (!empty($e['data'])): ?>
+                            <pre class="fzr-code" style="background:#fff; border:1px solid #fed7d7; max-height:200px; overflow:auto;"><?= h(print_r($e['data'], true)) ?></pre>
+                        <?php endif; ?>
+                    </div>
+                <?php endforeach; ?>
+            <?php endif; ?>
+        </div>
+        <div class="fzr-tracer-content active" id="fzr-tab-timeline">
+            <table class="fzr-table">
+                <thead><tr><th>Time</th><th>Cat</th><th>Message</th></tr></thead>
+                <tbody>
+                <?php foreach ($events as $e): ?>
+                    <tr>
+                        <td><?= round($e['time'] * 1000, 2) ?>ms</td>
+                        <td><span class="fzr-badge fzr-badge-<?= $e['category'] ?>"><?= $e['category'] ?></span></td>
+                        <td><?= h($e['message']) ?></td>
+                    </tr>
+                <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
+        <div class="fzr-tracer-content" id="fzr-tab-db">
+            <?php if (empty($byCategory['db'])): ?>
+                <p>No queries.</p>
+            <?php else: ?>
+                <table class="fzr-table">
+                    <thead><tr><th>Time</th><th>SQL</th></tr></thead>
+                    <tbody>
+                    <?php foreach ($byCategory['db'] as $e): ?>
+                        <tr>
+                            <td style="width:60px;"><?= round(($e['time'] ?? 0) * 1000, 2) ?>ms</td>
+                            <td><pre class="fzr-code"><?= h($e['message']) ?></pre></td>
+                        </tr>
+                    <?php endforeach; ?>
+                    </tbody>
+                </table>
+            <?php endif; ?>
+        </div>
+        <div class="fzr-tracer-content" id="fzr-tab-log">
+            <table class="fzr-table">
+                <thead><tr><th>Level</th><th>Message</th></tr></thead>
+                <tbody>
+                <?php foreach ($byCategory['log'] as $e): ?>
+                    <tr>
+                        <td style="width:60px;"><?= h($e['data']['level'] ?? 'info') ?></td>
+                        <td><?= h($e['message']) ?> <?php if(!empty($e['data']['data'])): ?><pre class="fzr-code"><?= h(json_encode($e['data']['data'], JSON_UNESCAPED_UNICODE)) ?></pre><?php endif; ?></td>
+                    </tr>
+                <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
+        <div class="fzr-tracer-content" id="fzr-tab-cache">
+            <table class="fzr-table">
+                <thead><tr><th>Op</th><th>Key</th><th>Hit</th></tr></thead>
+                <tbody>
+                <?php foreach ($byCategory['cache'] as $e): ?>
+                    <tr>
+                        <td><?= h($e['data']['op'] ?? '-') ?></td>
+                        <td><?= h($e['data']['key'] ?? '-') ?></td>
+                        <td><?= ($e['data']['hit'] ?? false) ? 'YES' : 'NO' ?></td>
+                    </tr>
+                <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
+        <div class="fzr-tracer-content" id="fzr-tab-request">
+            <table class="fzr-table">
+                <tr><th style="width:120px;">Status</th><td><span class="fzr-badge" style="background:<?= $toggleBg ?>; color:#fff; padding:2px 6px;"><?= $status ?></span></td></tr>
+                <tr><th>Method / URL</th><td><b><?= h($_SERVER['REQUEST_METHOD']) ?></b> <?= h($_SERVER['REQUEST_URI']) ?></td></tr>
+                <?php if (!empty($_GET)): ?>
+                <tr><th>GET Params</th><td><pre class="fzr-code"><?= h(print_r($_GET, true)) ?></pre></td></tr>
+                <?php endif; ?>
+                <?php if (!empty($_POST)): ?>
+                <tr><th>POST Params</th><td><pre class="fzr-code"><?= h(print_r($_POST, true)) ?></pre></td></tr>
+                <?php endif; ?>
+                <?php 
+                    $input = file_get_contents('php://input');
+                    if ($input && !empty(json_decode($input))):
+                ?>
+                <tr><th>JSON Body</th><td><pre class="fzr-code"><?= h($input) ?></pre></td></tr>
+                <?php endif; ?>
+            </table>
+        </div>
+        <div class="fzr-tracer-content" id="fzr-tab-system">
+            <table class="fzr-table">
+                <thead><tr><th style="width:120px;">Component</th><th>Status / Config</th></tr></thead>
+                <tbody>
+                <?php foreach ($sysInfo as $k => $v): ?>
+                    <tr>
+                        <td><b><?= h($k) ?></b></td>
+                        <td><?= h($v) ?></td>
+                    </tr>
+                <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+(function() {
+    const toggle = document.getElementById('fzr-tracer-toggle');
+    const panel = document.getElementById('fzr-tracer-panel');
+    const close = document.getElementById('fzr-tracer-close');
+    const tabs = document.querySelectorAll('.fzr-tracer-tab');
+    const contents = document.querySelectorAll('.fzr-tracer-content');
+
+    const setState = (open) => {
+        if (open) {
+            panel.style.display = 'flex';
+            toggle.style.display = 'none';
+        } else {
+            panel.style.display = 'none';
+            toggle.style.display = 'block';
+        }
+        localStorage.setItem('fzr_tracer_open', open);
+    };
+
+    const isOpen = localStorage.getItem('fzr_tracer_open') === 'true';
+    if(isOpen) setState(true);
+
+    // タブ切り替え
+    const switchTab = (target) => {
+        tabs.forEach(t => t.classList.remove('active'));
+        contents.forEach(c => c.classList.remove('active'));
+        const tab = document.querySelector(`.fzr-tracer-tab[data-tab="${target}"]`);
+        const content = document.getElementById('fzr-tab-' + target);
+        if (tab && content) {
+            tab.classList.add('active');
+            content.classList.add('active');
+            localStorage.setItem('fzr_tracer_tab', target);
+        }
+    };
+
+    // 初期タブ復元
+    const hasError = <?= json_encode($hasError) ?>;
+    const savedTab = localStorage.getItem('fzr_tracer_tab') || 'timeline';
+    switchTab(hasError ? 'error' : savedTab);
+
+    toggle.onclick = () => setState(true);
+    close.onclick = () => setState(false);
+
+    tabs.forEach(tab => {
+        tab.onclick = () => switchTab(tab.getAttribute('data-tab'));
+    });
+})();
+</script>

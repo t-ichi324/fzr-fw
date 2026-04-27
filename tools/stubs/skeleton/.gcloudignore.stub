@@ -1,0 +1,22 @@
+# --- GCloud Ignore ---
+/.gcloudignore
+/.git/
+/.gitignore
+
+# --- Dependencies ---
+/vendor/
+
+# --- Environment & Config ---
+/.env
+
+# --- Storage & Logic ---
+/{{PATH_STORAGE}}/
+/tools/
+/tests/
+/test/
+
+# --- System & Tools ---
+*.bat
+*.sh
+.DS_Store
+Thumbs.db

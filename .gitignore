@@ -1,0 +1,29 @@
+# Dependency directories
+/vendor/
+
+# Temporary / Generated files
+/app/
+/storage/
+/public/
+*.log
+*.phar
+*.bundle.php
+
+# Environment & Sensitive
+.env
+*.swp
+.DS_Store
+Thumbs.db
+
+# Editor / IDE
+.vscode/
+.idea/
+.claude/
+
+/skill.md
+/roadmap.md
+
+# Testing
+/test/
+/tests/
+/tests/ai/

@@ -1,0 +1,77 @@
+<?php
+
+use Fzr\Controller;
+use Fzr\Response;
+use Fzr\Render;
+use Fzr\Auth;
+use Fzr\Request;
+use Fzr\Message;
+use Fzr\Form;
+
+/**
+ * IndexController - Demo of simple login/logout without DB
+ */
+class IndexController extends Controller
+{
+    public function index()
+    {
+        Render::setTitle('{{TITLE}}');
+        return '{{VIEW}}';
+    }
+
+    public function phpinfo()
+    {
+        phpinfo();
+    }
+
+    /** Login Page */
+    public function login()
+    {
+        if (Auth::check()) return Response::redirect('dashboard');
+        Render::setTitle('Login (Demo)');
+        return Response::view('login');
+    }
+
+    /** Handle Login POST */
+    public function _post_login()
+    {
+        // Use Form for easy validation
+        $form = Form::fromPost();
+        $form->rule('id', 'ID')->required();
+        $form->rule('password', 'Password')->required();
+
+        if (!$form->validate()) {
+            $form->flashError();
+            return Response::redirect('login');
+        }
+
+        $id = $form->get('id');
+        $pw = $form->get('password');
+
+        // Simple demo check (ID: admin / PW: password)
+        if ($id === 'admin' && $pw === 'password') {
+            Auth::login((object)['id' => 1, 'name' => 'Admin'], ['admin']);
+            Message::success('Welcome back!');
+            return Response::redirect('dashboard');
+        }
+
+        Message::error('Invalid ID or Password. (Try admin / password)');
+        return Response::redirect('login');
+    }
+
+    /** Dashboard (Protected) */
+    #[\Fzr\Attr\Http\Auth]
+    public function dashboard()
+    {
+        Render::setTitle('Dashboard');
+        return Response::view('dashboard');
+    }
+
+    /** Logout */
+    public function logout()
+    {
+        Auth::logout();
+        Message::success('Logged out.');
+        return Response::redirect('/');
+    }
+}

@@ -1,0 +1,26 @@
+# --- Docker Ignore ---
+/.git/
+/.gitignore
+/.dockerignore
+/.gcloudignore
+
+# --- Dependencies ---
+/vendor/
+/composer.lock
+
+# --- Environment & Config ---
+/.env
+
+# --- Storage & Logic ---
+/{{PATH_STORAGE}}/
+/tools/
+/tests/
+/test/
+
+# --- System & Tools ---
+/Dockerfile
+*.bat
+*.sh
+.DS_Store
+Thumbs.db
+composer.lock

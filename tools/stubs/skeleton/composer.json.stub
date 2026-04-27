@@ -1,0 +1,14 @@
+{
+    "name": "fzr/project",
+    "type": "project",
+    "require": {
+        "php": ">=8.1"{{COMPOSER_GCS_REQUIRE}}{{FRAMEWORK_REQUIRE}}
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true,
+    "autoload": {
+        "psr-4": {
+            "App\\": "{{PATH_APP}}/"
+        }
+    }{{REPOSITORIES}}
+}

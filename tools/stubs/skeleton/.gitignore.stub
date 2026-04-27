@@ -1,0 +1,16 @@
+# --- Dependencies ---
+/vendor/
+
+# --- Environment & Config ---
+/.env
+
+# --- Storage & Logic ---
+/{{PATH_STORAGE}}/
+/tools/
+/tests/
+/test/
+
+# --- OS Files ---
+.DS_Store
+Thumbs.db
+composer.lock

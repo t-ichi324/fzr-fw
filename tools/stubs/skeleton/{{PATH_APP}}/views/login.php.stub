@@ -1,0 +1,28 @@
+<div style="max-width: 400px; margin: 0 auto;">
+    <div class="card">
+        <h2 style="text-align: center; margin-bottom: 0.5rem;">Login</h2>
+        <p style="text-align: center; color: #64748b; font-size: 0.9rem; margin-bottom: 2rem;">
+            Demo ID: <code>admin</code> / PW: <code>password</code>
+        </p>
+
+        <form method="post" action="<?= Url::get('login') ?>">
+            <?= csrf_field() ?>
+            
+            <div class="form-group">
+                <label>ID</label>
+                <input type="text" name="id" class="form-control" required autofocus>
+            </div>
+            
+            <div class="form-group">
+                <label>Password</label>
+                <input type="password" name="password" class="form-control" required>
+            </div>
+
+            <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 1rem;">Login</button>
+        </form>
+    </div>
+
+    <p style="text-align: center;">
+        <a href="<?= Url::get('/') ?>" class="btn btn-outline" style="width: 100%;">Back to Home</a>
+    </p>
+</div>

@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="<?= Env::get('app.lang', '{{LANG}}') ?>">
+<head>
+    <meta charset="<?= Env::get('app.charset', '{{CHARSET}}') ?>">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><?= Render::getTitle() ?> - <?= Env::get('app.name', '{{APP_NAME}}') ?></title>
+    <link rel="stylesheet" href="<?= Url::get('/css/style.css') ?>">
+</head>
+<body>
+    <header>
+        <div class="container">
+            <a href="<?= Url::get('/') ?>" class="brand">
+                <img src="<?= Url::get('/images/logo.svg') ?>" alt="Logo" class="logo">
+                <span><?= Env::get('app.name', '{{APP_NAME}}') ?></span>
+            </a>
+            <button class="menu-toggle" id="menu-toggle">
+                <span></span>
+                <span></span>
+                <span></span>
+            </button>
+            <nav id="nav">
+                <ul>
+                    <li><a href="<?= Url::get('/') ?>">Home</a></li>
+                    <li><a href="<?= Url::get('phpinfo') ?>">PHP Info</a></li>
+                    <li><a href="<?= Url::get('login') ?>">Login</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+
+    <main>
+        <div class="container">
+            <?php if ($msg = Message::get()): ?>
+                <div class="alert alert-<?= h($msg['type']) ?>">
+                    <?= h($msg['message']) ?>
+                </div>
+            <?php endif; ?>
+
+            <?= Render::getContent() ?>
+        </div>
+    </main>
+
+    <footer>
+        <div class="container">
+            <p>Powered by Fzr</p>
+        </div>
+        
+        <?php if (Context::isDebug()) { echo Render::getTemplate("@layouts/debug"); } ?>
+    </footer>
+    <script src="<?= Url::get('/js/app.js') ?>"></script>
+</body>
+</html>

@@ -1,0 +1,1 @@
+<div class='err-c'><h1 class='err-code'>404</h1><p class='err-msg'>ページが見つかりません</p><a href='<?= Url::get("/") ?>' class='err-back'>ホームに戻る</a></div>

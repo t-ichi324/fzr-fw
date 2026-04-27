@@ -1,0 +1,47 @@
+# syntax=docker/dockerfile:1
+# ==========================================
+# Fzr Cloud Run Dockerfile
+# ==========================================
+FROM php:8.3-apache
+
+# 1. システムパッケージ・PHP拡張
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    zip unzip libicu-dev {{DOCKER_SYS_LIBS}} \
+    && docker-php-ext-configure intl \
+    && docker-php-ext-install intl \
+    && ([ -n "{{DOCKER_PHP_EXTS}}" ] && docker-php-ext-install {{DOCKER_PHP_EXTS}} || true) \
+    && a2enmod rewrite headers
+
+{{DOCKER_REDIS_INSTALL}}
+# 2. OPcache (本番パフォーマンス向上)
+RUN echo "opcache.enable=1\nopcache.memory_consumption=128\nopcache.max_accelerated_files=10000\nopcache.revalidate_freq=0\nopcache.validate_timestamps=0" \
+    >> /usr/local/etc/php/conf.d/docker-php-ext-opcache.ini
+
+# 3. Composer 導入
+COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
+
+# 4. 依存関係インストール (composer.lock でキャッシュ最大化)
+WORKDIR /var/www/html
+COPY composer.json composer.lock* ./
+RUN composer install --no-dev --no-scripts --no-autoloader --prefer-dist --no-interaction
+
+# 5. Apache ポート設定 ($PORT 環境変数対応)
+RUN sed -i 's/Listen 80/Listen ${PORT}/g' /etc/apache2/ports.conf \
+    && sed -i 's/:80/:${PORT}/g' /etc/apache2/sites-available/000-default.conf
+
+# 6. ドキュメントルートを public に変更
+ENV APACHE_DOCUMENT_ROOT=/var/www/html/public
+RUN sed -ri -e 's!/var/www/html!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/sites-available/*.conf \
+    && sed -ri -e 's!/var/www/!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/apache2.conf /etc/apache2/conf-available/*.conf
+
+# 7. ソースコード配置 + オートローダー最適化
+COPY . .
+RUN composer dump-autoload --optimize --no-dev
+
+# 8. 権限調整
+RUN chown -R www-data:www-data /var/www/html \
+    && find /var/www/html/storage -type d -exec chmod 775 {} + 2>/dev/null || true
+
+ENV PORT=8080
+EXPOSE 8080
+CMD ["apache2-foreground"]

@@ -1,0 +1,52 @@
+; Fzr Configuration (Shared/Fixed Settings)
+; Preset: {{PRESET}}
+; Generated: {{GENERATED_AT}}
+; ローカル開発では .env ファイルの利用を推奨します。
+; (Local overrides: Using a .env file is recommended for local development.)
+; あるいは、include_ini を使用して追加のINIファイルを読み込むことも可能です。
+; (Alternatively, use include_ini to load additional INI files.)
+; include_ini = "append_config.ini"
+
+[app]
+name = "{{APP_NAME}}"
+key = "{{APP_KEY}}"
+timezone = {{TIMEZONE}}
+charset = UTF-8
+debug = {{DEBUG}}
+
+[path]
+app = {{PATH_APP}}
+storage = {{PATH_STORAGE}}
+db = db
+log = {{PATH_STORAGE}}/log
+temp = {{PATH_STORAGE}}/temp
+
+; TIP: セキュリティ向上のため、実際の値は .env ファイルまたは環境変数で指定してください。
+; (Set real values in a .env file or local environment variables for security.)
+[db]
+driver = {{DB_DRIVER}}
+auto_migrate = true
+{{DB_SQLITE_PATH}}
+{{DB_CONFIG_MASKED}}
+
+[storage]
+driver = local
+public_disk = public
+private_disk = private
+
+[storage.public]
+driver = local
+root = {{PATH_STORAGE}}/public
+url = /storage/public
+
+[storage.private]
+driver = local
+root = {{PATH_STORAGE}}/private
+
+[log]
+access = {{LOG_ACCESS}}
+debug = {{LOG_DEBUG}}
+db_sel = {{LOG_DB_SEL}}
+db_exe = true
+
+{{GCP_INI}}

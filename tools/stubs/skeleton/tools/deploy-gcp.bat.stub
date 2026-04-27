@@ -1,0 +1,45 @@
+@echo off
+chcp 65001 >nul
+cd /d "%~dp0.."
+rem Fzr Cloud Run Deployment Script
+rem Generated at {{GENERATED_AT}}
+
+set SERVICE_NAME={{DEPLOY_SERVICE}}
+set REGION={{DEPLOY_REGION}}
+set PROJECT_ID={{GCP_PROJECT_ID}}
+
+echo ------------------------------------------------
+echo  Deploying %SERVICE_NAME% to %REGION%
+echo  Project: %PROJECT_ID%
+echo ------------------------------------------------
+
+rem 環境変数の組み立て
+set ENV_VARS=APP_ENV=production,APP_STATELESS=true
+{{DEPLOY_REDIS_ENV_BAT}}
+rem DB 認証情報はリポジトリに含めないため、手動で Cloud Run シークレットを設定してください。
+rem 例: gcloud run deploy ... --update-secrets "DB_PASSWORD=my-db-password:latest"
+
+call gcloud run deploy "%SERVICE_NAME%" ^
+    --source . ^
+    --project "%PROJECT_ID%" ^
+    --region "%REGION%" ^
+    --allow-unauthenticated ^
+    --update-env-vars "%ENV_VARS%"
+
+if errorlevel 1 goto :DEPLOY_FAIL
+
+:DEPLOY_SUCCESS
+echo.
+echo [Success] Successfully deployed!
+echo URL:
+call gcloud run services describe "%SERVICE_NAME%" --project "%PROJECT_ID%" --region "%REGION%" --format="value(status.url)"
+goto :END
+
+:DEPLOY_FAIL
+echo.
+echo [Error] Deployment failed.
+goto :END
+
+:END
+echo.
+pause

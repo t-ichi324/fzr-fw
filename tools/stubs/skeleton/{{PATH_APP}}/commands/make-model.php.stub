@@ -1,0 +1,41 @@
+<?php
+/**
+ * make-model — DBからEntityクラスを生成する
+ *
+ * Usage:
+ *   php cli make-model            # 全テーブル
+ *   php cli make-model users      # 指定テーブル
+ *   php cli make-model users -f   # 上書き
+ */
+
+use Fzr\Command;
+use Fzr\Db\Db;
+
+class MakeModelCommand extends Command
+{
+    public function handle(): int
+    {
+        $force   = $this->hasFlag('-f');
+        $targets = array_values(array_filter($this->argv, fn($a) => $a !== '-f'));
+
+        $result = Db::generateModels(ABSPATH . '/{{PATH_APP}}/models', $force, $targets);
+
+        foreach ($result['generated'] as $item) {
+            $this->success("  [GEN]  {$item['table']} -> {$item['class']}");
+        }
+        foreach ($result['skipped'] as $item) {
+            $this->warn("  [SKIP] {$item['table']} -> {$item['class']} (use -f to overwrite)");
+        }
+
+        if (empty($result['generated']) && empty($result['skipped'])) {
+            $this->line('No tables found.');
+            return 0;
+        }
+
+        $this->line();
+        $this->success('Done. Files generated in {{PATH_APP}}/models/');
+        return 0;
+    }
+}
+
+exit((new MakeModelCommand(array_slice($argv, 2)))->handle());

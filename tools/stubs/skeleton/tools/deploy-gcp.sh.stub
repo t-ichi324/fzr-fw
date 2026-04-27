@@ -1,0 +1,51 @@
+#!/bin/bash
+# Fzr Cloud Run Deployment Script (Shell)
+# Generated at {{GENERATED_AT}}
+
+SERVICE_NAME="{{DEPLOY_SERVICE}}"
+REGION="{{DEPLOY_REGION}}"
+
+echo "------------------------------------------------"
+echo " Deploying ${SERVICE_NAME} to Google Cloud Run"
+echo " Region: ${REGION}"
+echo "------------------------------------------------"
+
+# GCP project ID
+PROJECT_ID="{{GCP_PROJECT_ID}}"
+if [ -z "$PROJECT_ID" ] || [ "$PROJECT_ID" == "my-gcp-project" ]; then
+    # Fallback to current gcloud config if not set
+    PROJECT_ID=$(gcloud config get-value project 2>/dev/null)
+fi
+
+if [ -z "$PROJECT_ID" ]; then
+    echo "Error: No Google Cloud project specified."
+    echo "Please set your PROJECT_ID in this script or run 'gcloud config set project [PROJECT_ID]'."
+    exit 1
+fi
+
+echo "Project ID: ${PROJECT_ID}"
+echo ""
+
+# 環境変数の組み立て
+ENV_VARS="APP_ENV=production,APP_STATELESS=true"
+{{DEPLOY_REDIS_ENV_SH}}
+# DB 認証情報はリポジトリに含めないため、手動で Cloud Run シークレットを設定してください。
+# 例: gcloud run deploy ... --update-secrets "DB_PASSWORD=my-db-password:latest"
+# 詳細: https://cloud.google.com/run/docs/configuring/secrets
+
+# Deploy to Cloud Run (Source-based build)
+gcloud run deploy "${SERVICE_NAME}" \
+    --source . \
+    --project "${PROJECT_ID}" \
+    --region "${REGION}" \
+    --allow-unauthenticated \
+    --update-env-vars "${ENV_VARS}"
+
+if [ $? -eq 0 ]; then
+    echo ""
+    echo "Successfully deployed!"
+    echo "URL: $(gcloud run services describe "${SERVICE_NAME}" --region "${REGION}" --format='value(status.url)')"
+else
+    echo "Deployment failed."
+    exit 1
+fi
