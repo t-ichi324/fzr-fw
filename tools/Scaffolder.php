@@ -13,7 +13,7 @@ use PDO;
 class Scaffolder
 {
     /** GitHub Repository URL */
-    const REPO_URL = 'https://github.com/t-ichi324/fzr.git';
+    const REPO_URL = 'https://github.com/t-ichi324/fzr-fw.git';
 
     /**
      * インストール済みかチェック
@@ -252,7 +252,8 @@ class Scaffolder
             $fzrCorePath = dirname(dirname(__FILE__));
             $frameworkRequire = ",\n        \"fzr/fw\": \"*\"";
             $repoUrl = self::REPO_URL;
-            $repositories = ",\n    \"repositories\": [\n        {\"type\": \"path\", \"url\": " . json_encode($fzrCorePath) . ", \"options\": {\"symlink\": false}},\n        {\"type\": \"vcs\", \"url\": \"{$repoUrl}\"}\n    ]";
+            $kitUrl  = 'https://github.com/t-ichi324/fzr-kit.git';
+            $repositories = ",\n    \"repositories\": [\n        {\"type\": \"path\", \"url\": " . json_encode($fzrCorePath) . ", \"options\": {\"symlink\": false}},\n        {\"type\": \"vcs\", \"url\": \"{$repoUrl}\"},\n        {\"type\": \"vcs\", \"url\": \"{$kitUrl}\"}\n    ]";
         }
 
         return [

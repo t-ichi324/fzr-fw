@@ -2,7 +2,8 @@
     "name": "fzr/project",
     "type": "project",
     "require": {
-        "php": ">=8.1"{{COMPOSER_GCS_REQUIRE}}{{FRAMEWORK_REQUIRE}}
+        "php": ">=8.1",
+        "fzr/kit": "dev-main"{{COMPOSER_GCS_REQUIRE}}{{FRAMEWORK_REQUIRE}}
     },
     "minimum-stability": "dev",
     "prefer-stable": true,
