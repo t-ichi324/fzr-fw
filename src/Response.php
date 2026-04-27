@@ -67,8 +67,9 @@ class Response
     // コントローラ用ファクトリ
     // =============================
     /** テンプレート応答生成 */
-    public static function view(string $template, ?string $baseTemplate = null): array
+    public static function view(string $template, array $data = [], ?string $baseTemplate = null): array
     {
+        if (!empty($data)) Render::set($data);
         return ['type' => 'view', 'value' => [
             'template' => $template,
             'baseTemplate' => $baseTemplate ?? (defined('VIEW_TEMPLATE_BASE') ? VIEW_TEMPLATE_BASE : ''),
@@ -77,8 +78,9 @@ class Response
     }
 
     /** 文字列応答生成 */
-    public static function viewRaw(string $content, ?string $baseTemplate = null): array
+    public static function viewRaw(string $content, array $data = [], ?string $baseTemplate = null): array
     {
+        if (!empty($data)) Render::set($data);
         return ['type' => 'view-raw', 'value' => [
             'content' => $content,
             'baseTemplate' => $baseTemplate ?? (defined('VIEW_TEMPLATE_BASE') ? VIEW_TEMPLATE_BASE : ''),

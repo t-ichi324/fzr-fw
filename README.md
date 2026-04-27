@@ -256,16 +256,16 @@ use Fzr\Attr\Http\{Csrf, Api, Roles, AllowCors, AllowCache, AllowIframe, IsReadO
 モデルのプロパティに付与することで、自動バリデーションやラベル表示に利用できます。
 
 ```php
-use Fzr\Attr\Field\{Label, Required, MaxLength, MinLength, Email, Numeric, Integer, Url, Regex, In, NotIn, Between, Confirmed, SameAs, Date, Custom};
+use Fzr\Attr\Field\{Label, Required, Max, Min, MaxValue, MinValue, Email, Numeric, Integer, Url, Regex, In, NotIn, Between, Confirmed, SameAs, Date, Custom};
 
 class User extends \Fzr\Model {
-    #[Label('ユーザー名'), Required, MaxLength(50)]
+    #[Label('ユーザー名'), Required, Max(50)]
     public string $name;
 
     #[Label('メールアドレス'), Required, Email]
     public string $email;
 
-    #[Label('パスワード'), Required, MinLength(8), Confirmed]
+    #[Label('パスワード'), Required, Min(8), Confirmed]
     public string $password;
     
     #[Label('年齢'), Integer, Between(18, 100)]
@@ -285,8 +285,10 @@ class User extends \Fzr\Model {
 | `#[Label('名前')]` | フィールドの表示名を設定 |
 | `#[Required]` | 必須項目 |
 | `#[Email]` | メールアドレス形式 |
-| `#[MaxLength(n)]` | 最大文字数 |
-| `#[MinLength(n)]` | 最小文字数 |
+| `#[Max(n)]` | 最大文字数 |
+| `#[Min(n)]` | 最小文字数 |
+| `#[MaxValue(n)]` | 最大値 |
+| `#[MinValue(n)]` | 最小値 |
 | `#[Numeric]` | 数値形式 |
 | `#[Integer]` | 整数形式 |
 | `#[Url]` | URL形式 |

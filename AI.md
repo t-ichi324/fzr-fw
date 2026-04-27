@@ -60,7 +60,7 @@ GET  /login/login→ controller=login, action=login  → LoginController::login(
 | ファイル | 含むクラス／型 | 備考 |
 |---------|-------------|------|
 | `src/Attr/Http.php` | `Csrf`, `Auth`, `Api`, `Roles`, `Role`, `AllowCors`, `AllowCache`, `AllowIframe`, `IsReadOnly`, `IpWhitelist` | namespace: `Fzr\Attr\Http` |
-| `src/Attr/Field.php` | `Label`, `Required`, `MaxLength`, `MinLength`, `Email`, `Numeric`, `Integer`, `Url`, `Regex`, `In`, `NotIn`, `Between`, `Confirmed`, `SameAs`, `Date`, `Custom` | namespace: `Fzr\Attr\Field` |
+| `src/Attr/Field.php` | `Label`, `Required`, `Max`, `Min`, `MaxValue`, `MinValue`, `Email`, `Numeric`, `Integer`, `Url`, `Regex`, `In`, `NotIn`, `Between`, `Confirmed`, `SameAs`, `Date`, `Custom` | namespace: `Fzr\Attr\Field` |
 
 > `Attr/Http.php` と `Attr/Field.php` は PHP Attribute の仕様上複数定義が必要なため、オートロード不可。`src/Loader.php` で事前 `require_once` 済み。
 
@@ -248,7 +248,7 @@ $user->save();
 
 // Option B: define rules manually
 $form = Form::fromRequest();
-$form->rule('name',  '名前')->required()->maxLength(50);
+$form->rule('name',  '名前')->required()->max(50);
 $form->rule('email', 'メール')->required()->email();
 $form->rule('age',   '年齢')->integer()->between(0, 150);
 
@@ -278,8 +278,10 @@ Render::setData('form', $form);
 |-----------|-------------|------|
 | `#[Required]` | `required()` | Non-empty |
 | `#[Email]` | `email()` | Valid email |
-| `#[MaxLength(n)]` | `maxLength(n)` | ≤ n chars |
-| `#[MinLength(n)]` | `minLength(n)` | ≥ n chars |
+| `#[Max(n)]` | `max(n)` | ≤ n chars (length) |
+| `#[Min(n)]` | `min(n)` | ≥ n chars (length) |
+| `#[MaxValue(n)]` | `maxValue(n)` | ≤ n (numeric value) |
+| `#[MinValue(n)]` | `minValue(n)` | ≥ n (numeric value) |
 | `#[Numeric]` | `numeric()` | Numeric value |
 | `#[Integer]` | `integer()` | Integer value |
 | `#[Url]` | `url()` | Valid URL |
@@ -311,7 +313,7 @@ Validation error messages can be overridden in `app.ini`:
 ```ini
 [validation]
 required  = ":field は必須です。"
-maxLength = ":field は :len 文字以内で入力してください。"
+max = ":field は :max 文字以内で入力してください。"
 ```
 
 ---

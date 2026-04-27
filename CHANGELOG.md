@@ -3,6 +3,10 @@
 ## [Unreleased]
 
 ### Changed
+- **バリデーションルールの命名簡略化**: `MinLength` / `MaxLength` を `Min` / `Max` へ改称。
+    - `FormValidator`: `minLength()` -> `min()`, `maxLength()` -> `max()`
+    - Attributes: `#[MinLength]` -> `#[Min]`, `#[MaxLength]` -> `#[Max]`
+    - エラーメッセージのプレースホルダーを `:len` から `:min` / `:max` へ変更。
 - **プロジェクト構成の再整理**: フレームワーク本体を `fzr/fw` ディレクトリへ配置。`fzr/kit` (旧 `php-libs`) と共に `fzr` ブランドのモノレポ風構成に統合。
 
 ### Added

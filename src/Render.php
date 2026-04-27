@@ -56,12 +56,21 @@ class Render
     /**
      * ビューで使用する変数を設定します。
      * 
-     * @param string $key 変数名
-     * @param mixed $value 値
+     * @param string|array $key 変数名または [変数名 => 値] の配列
+     * @param mixed $value 値（$key が配列の場合は無視されます）
      */
+    public static function set(string|array $key, mixed $value = null): void
+    {
+        if (is_array($key)) {
+            self::$data = array_merge(self::$data, $key);
+        } else {
+            self::$data[$key] = $value;
+        }
+    }
+
     public static function setData(string $key, mixed $value)
     {
-        self::$data[$key] = $value;
+        self::set($key, $value);
     }
     /**
      * 設定された変数を取得します。

@@ -31,9 +31,16 @@
     <main>
         <div class="container">
             <?php if ($msg = Message::get()): ?>
-                <div class="alert alert-<?= h($msg['type']) ?>">
-                    <?= h($msg['message']) ?>
-                </div>
+                <ul>
+                    <li><a href="<?= Url::get('/') ?>">Home</a></li>
+                    <li><a href="<?= Url::get('phpinfo') ?>">PHP Info</a></li>
+                    <?php if (!Auth::check()): ?>
+                        <li><a href="<?= Url::get('login') ?>">Login</a></li>
+                    <?php else: ?>
+                        <li><a href="<?= Url::get('dashboard') ?>">Dashboard</a></li>
+                        <li><a href="<?= Url::get('logout') ?>">Logout</a></li>
+                    <?php endif; ?>
+                </ul>
             <?php endif; ?>
 
             <?= Render::getContent() ?>

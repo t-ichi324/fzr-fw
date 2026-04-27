@@ -84,10 +84,14 @@ class Form extends Bag
                     $rule->required();
                 } elseif ($instance instanceof \Fzr\Attr\Field\Email) {
                     $rule->email();
-                } elseif ($instance instanceof \Fzr\Attr\Field\MinLength) {
-                    $rule->minLength($instance->min);
-                } elseif ($instance instanceof \Fzr\Attr\Field\MaxLength) {
-                    $rule->maxLength($instance->max);
+                } elseif ($instance instanceof \Fzr\Attr\Field\Min) {
+                    $rule->min($instance->min);
+                } elseif ($instance instanceof \Fzr\Attr\Field\Max) {
+                    $rule->max($instance->max);
+                } elseif ($instance instanceof \Fzr\Attr\Field\MinValue) {
+                    $rule->minValue($instance->min);
+                } elseif ($instance instanceof \Fzr\Attr\Field\MaxValue) {
+                    $rule->maxValue($instance->max);
                 } elseif ($instance instanceof \Fzr\Attr\Field\Numeric) {
                     $rule->numeric();
                 } elseif ($instance instanceof \Fzr\Attr\Field\Integer) {

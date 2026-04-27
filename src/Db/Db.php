@@ -331,7 +331,7 @@ class Db
             $label = $col['comment'] ?: $name;
             $attrs[] = "#[Label('$label')]";
             if ($col['notnull'] && !$col['pk']) $attrs[] = '#[Required]';
-            if ($col['length'] && $type === 'string') $attrs[] = "#[MaxLength({$col['length']})]";
+            if ($col['length'] && $type === 'string') $attrs[] = "#[Max({$col['length']})]";
             if (strpos($col['type'], 'int') !== false) $attrs[] = '#[Numeric]';
             if ($name === 'email') $attrs[] = '#[Email]';
 
@@ -344,7 +344,7 @@ class Db
         namespace App\Model;
 
         use Fzr\Db\Entity;
-        use Fzr\Attr\Field\{Label, Required, MaxLength, Numeric, Email};
+        use Fzr\Attr\Field\{Label, Required, Max, Numeric, Email};
 
         /**
          * $className エンティティ

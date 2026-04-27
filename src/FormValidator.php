@@ -53,14 +53,24 @@ class FormValidator
         $this->rules['email'] = ['param' => true, 'message' => $message];
         return $this;
     }
-    public function minLength(int $len, ?string $message = null): static
+    public function min(int $min, ?string $message = null): static
     {
-        $this->rules['minLength'] = ['param' => $len, 'message' => $message];
+        $this->rules['min'] = ['param' => $min, 'message' => $message];
         return $this;
     }
-    public function maxLength(int $len, ?string $message = null): static
+    public function max(int $max, ?string $message = null): static
     {
-        $this->rules['maxLength'] = ['param' => $len, 'message' => $message];
+        $this->rules['max'] = ['param' => $max, 'message' => $message];
+        return $this;
+    }
+    public function minValue(float|int $min, ?string $message = null): static
+    {
+        $this->rules['minValue'] = ['param' => $min, 'message' => $message];
+        return $this;
+    }
+    public function maxValue(float|int $max, ?string $message = null): static
+    {
+        $this->rules['maxValue'] = ['param' => $max, 'message' => $message];
         return $this;
     }
     public function password(?string $message = null): static
@@ -154,8 +164,10 @@ class FormValidator
             $envKey = "validation." . $rule;
             $defaultMessages = [
                 'required'   => ':field is required.',
-                'maxLength'  => ':field must be at most :len characters.',
-                'minLength'  => ':field must be at least :len characters.',
+                'max'        => ':field must be at most :max characters.',
+                'min'        => ':field must be at least :min characters.',
+                'maxValue'   => ':field must be at most :max.',
+                'minValue'   => ':field must be at least :min.',
                 'email'      => ':field must be a valid email address.',
                 'password'   => ':field is invalid.',
                 'numeric'    => ':field must be numeric.',
@@ -189,8 +201,10 @@ class FormValidator
             $msg = $data['message'];
             $error = match ($rule) {
                 'required'   => $skip ? $this->msg('required', [], $msg) : null,
-                'maxLength'  => (!$skip && is_string($value) && mb_strlen($value) > $param) ? $this->msg('maxLength', ['len' => $param], $msg) : null,
-                'minLength'  => (!$skip && is_string($value) && mb_strlen($value) < $param) ? $this->msg('minLength', ['len' => $param], $msg) : null,
+                'max'        => (!$skip && is_string($value) && mb_strlen($value) > $param) ? $this->msg('max', ['max' => $param], $msg) : null,
+                'min'        => (!$skip && is_string($value) && mb_strlen($value) < $param) ? $this->msg('min', ['min' => $param], $msg) : null,
+                'maxValue'   => (!$skip && (!is_numeric($value) || (float)$value > $param)) ? $this->msg('maxValue', ['max' => $param], $msg) : null,
+                'minValue'   => (!$skip && (!is_numeric($value) || (float)$value < $param)) ? $this->msg('minValue', ['min' => $param], $msg) : null,
                 'email'      => (!$skip && !filter_var($value, FILTER_VALIDATE_EMAIL)) ? $this->msg('email', [], $msg) : null,
                 'numeric'    => (!$skip && !is_numeric($value)) ? $this->msg('numeric', [], $msg) : null,
                 'integer'    => (!$skip && !preg_match('/^-?[0-9]+$/', (string)$value)) ? $this->msg('integer', [], $msg) : null,

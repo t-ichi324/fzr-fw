@@ -10,7 +10,7 @@ use Attribute;
  * Use to annotate {@see Entity} or {@see Model} properties with metadata.
  *
  * - #[Label]: Provides a human-readable name for form rendering and error messages.
- * - Validation Attributes: #[Required], #[Email], #[Numeric], #[MaxLength], etc.
+ * - Validation Attributes: #[Required], #[Email], #[Numeric], #[Max], #[Min], #[MaxValue], #[MinValue], etc.
  * - Automatically extracted by {@see Form} and {@see Entity} to enforce rules or map schema.
  */
 
@@ -34,7 +34,7 @@ class Required
 }
 
 #[Attribute(Attribute::TARGET_PROPERTY)]
-class MaxLength
+class Max
 {
     public int $max;
     public function __construct(int $max)
@@ -43,12 +43,12 @@ class MaxLength
     }
     public function toValidation(): array
     {
-        return ['maxLength' => $this->max];
+        return ['max' => $this->max];
     }
 }
 
 #[Attribute(Attribute::TARGET_PROPERTY)]
-class MinLength
+class Min
 {
     public int $min;
     public function __construct(int $min)
@@ -57,7 +57,35 @@ class MinLength
     }
     public function toValidation(): array
     {
-        return ['minLength' => $this->min];
+        return ['min' => $this->min];
+    }
+}
+
+#[Attribute(Attribute::TARGET_PROPERTY)]
+class MaxValue
+{
+    public float $max;
+    public function __construct(float $max)
+    {
+        $this->max = $max;
+    }
+    public function toValidation(): array
+    {
+        return ['maxValue' => $this->max];
+    }
+}
+
+#[Attribute(Attribute::TARGET_PROPERTY)]
+class MinValue
+{
+    public float $min;
+    public function __construct(float $min)
+    {
+        $this->min = $min;
+    }
+    public function toValidation(): array
+    {
+        return ['minValue' => $this->min];
     }
 }
 
