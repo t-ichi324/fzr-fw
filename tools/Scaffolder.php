@@ -249,11 +249,10 @@ class Scaffolder
         $frameworkRequire = "";
         $repositories = "";
         if ($frameworkMode === 'composer') {
-            $fzrCorePath = dirname(dirname(__FILE__));
             $frameworkRequire = ",\n        \"fzr/fw\": \"*\"";
             $repoUrl = self::REPO_URL;
             $kitUrl  = 'https://github.com/t-ichi324/fzr-kit.git';
-            $repositories = ",\n    \"repositories\": [\n        {\"type\": \"path\", \"url\": " . json_encode($fzrCorePath) . ", \"options\": {\"symlink\": false}},\n        {\"type\": \"vcs\", \"url\": \"{$repoUrl}\"},\n        {\"type\": \"vcs\", \"url\": \"{$kitUrl}\"}\n    ]";
+            $repositories = ",\n    \"repositories\": [\n        {\"type\": \"vcs\", \"url\": \"{$repoUrl}\"},\n        {\"type\": \"vcs\", \"url\": \"{$kitUrl}\"}\n    ]";
         }
 
         return [
