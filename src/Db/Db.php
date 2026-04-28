@@ -61,21 +61,21 @@ class Db
     }
 
     /**
-     * RAW SQL 実行（SELECT）→ Result を返す
+     * RAW SQL 実行（SELECT）→ Collection を返す
      *
      * @template T of object
      * @param  string      $sql           SELECT 文
      * @param  array       $params        バインドパラメータ
      * @param  string      $connectionKey 接続キー
      * @param  class-string<T>|null $fetchClass 結果を詰めるクラス名（null で stdClass）
-     * @return Result<int, T|\stdClass>
+     * @return \Fzr\Collection<int, T|\stdClass>
      */
     public static function select(
         string $sql,
         array $params = [],
         string $connectionKey = 'default',
         ?string $fetchClass = null
-    ): Result {
+    ): \Fzr\Collection {
         $pdo  = self::pdo($connectionKey);
         $stmt = $pdo->prepare($sql);
         $stmt->execute($params);
@@ -85,15 +85,15 @@ class Db
         } else {
             $rows = $stmt->fetchAll(\PDO::FETCH_OBJ);
         }
-        return new Result($rows, count($rows));
+        return \Fzr\Collection::make($rows);
     }
 
     /**
-     * RAW SQL 実行（SELECT + ページネーション）→ Result を返す
+     * RAW SQL 実行（SELECT + ページネーション）→ Paginated を返す
      *
      * @template T of object
      * @param  class-string<T>|null $fetchClass 結果を詰めるクラス名
-     * @return Result<int, T|\stdClass>
+     * @return Paginated<int, T|\stdClass>
      */
     public static function page(
         string $sql,
@@ -102,7 +102,7 @@ class Db
         int $perPage = 20,
         string $connectionKey = 'default',
         ?string $fetchClass = null
-    ): Result {
+    ): Paginated {
         $pdo  = self::pdo($connectionKey);
         $page = max(1, $page);
 
@@ -122,7 +122,7 @@ class Db
         } else {
             $rows = $stmt->fetchAll(\PDO::FETCH_OBJ);
         }
-        return new Result($rows, $total, $page, $perPage);
+        return new Paginated($rows, $total, $page, $perPage);
     }
 
     /**

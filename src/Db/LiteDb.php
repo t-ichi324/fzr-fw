@@ -90,9 +90,9 @@ class LiteDb
     /**
      * @template T of object
      * @param class-string<T>|null $fetchClass
-     * @return Result<int, T|\stdClass>
+     * @return \Fzr\Collection<int, T|\stdClass>
      */
-    public static function select(string $sql, array $params = [], ?string $fetchClass = null): Result
+    public static function select(string $sql, array $params = [], ?string $fetchClass = null): \Fzr\Collection
     {
         return Db::select($sql, $params, self::getConnection()->getKey(), $fetchClass);
     }
@@ -100,9 +100,9 @@ class LiteDb
     /**
      * @template T of object
      * @param class-string<T>|null $fetchClass
-     * @return Result<int, T|\stdClass>
+     * @return Paginated<int, T|\stdClass>
      */
-    public static function page(string $sql, array $params = [], int $p = 1, int $perPage = 20, ?string $fetchClass = null): Result
+    public static function page(string $sql, array $params = [], int $p = 1, int $perPage = 20, ?string $fetchClass = null): Paginated
     {
         return Db::page($sql, $params, $p, $perPage, self::getConnection()->getKey(), $fetchClass);
     }

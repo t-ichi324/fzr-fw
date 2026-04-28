@@ -4,6 +4,8 @@ namespace Fzr\Db;
 
 use Fzr\Logger;
 use Fzr\Tracer;
+use Fzr\Collection;
+use Fzr\Db\Paginated;
 
 /**
  * Query Builder — fluent interface for building SQL queries programmatically.
@@ -337,9 +339,9 @@ class Query
     /**
      * ページネーション
      *
-     * @return Result<int, T|\stdClass>
+     * @return Paginated<int, T|\stdClass>
      */
-    public function page(int $page, int $perPage = 20): Result
+    public function page(int $page, int $perPage = 20): Paginated
     {
         $page         = max(1, $page);
         $this->limit  = $perPage;
@@ -351,7 +353,7 @@ class Query
         $total = (int)$stmt->fetchColumn();
 
         $rows = $this->all();
-        return new Result($rows, $total, $page, $perPage);
+        return new Paginated($rows, $total, $page, $perPage);
     }
 
     // =============================
@@ -361,9 +363,9 @@ class Query
     /**
      * 全行取得
      *
-     * @return array<int, T|\stdClass>
+     * @return \Fzr\Collection<int, T|\stdClass>
      */
-    public function all(): array
+    public function all(): \Fzr\Collection
     {
         $sql = $this->buildSelect();
         return $this->executeSelect($sql);
@@ -694,11 +696,13 @@ class Query
             $q->limit  = $size;
             $q->offset = $offset;
             $rows = $q->all();
-            if (empty($rows)) break;
+            // 修正箇所: empty($rows) ではなく isEmpty() を使う
+            if ($rows->isEmpty()) break;
             $result = $callback($rows);
             if ($result === false) break;
             $offset += $size;
-        } while (count($rows) === $size);
+            // 取得件数が指定サイズより少なければ、そこで終了
+        } while ($rows->count() === $size);
     }
 
     // =============================
@@ -744,7 +748,10 @@ class Query
         return empty($this->joins) ? '' : ' ' . implode(' ', $this->joins);
     }
 
-    protected function executeSelect(string $sql): array
+    /**
+     * @return \Fzr\Collection<int, T|\stdClass>
+     */
+    protected function executeSelect(string $sql): \Fzr\Collection
     {
         $stmt = $this->connection->getPdo()->prepare($sql);
         $start = microtime(true);
@@ -752,10 +759,15 @@ class Query
         $elapsed = microtime(true) - $start;
         Logger::db($this->connection->getKey(), 3, $sql, $this->params);
         if (Tracer::isEnabled()) Tracer::recordQuery($sql, $this->params, $elapsed, $this->connection->getKey());
+
+        $rows = [];
         if ($this->fetchClass !== null) {
-            return $stmt->fetchAll(\PDO::FETCH_CLASS | \PDO::FETCH_PROPS_LATE, $this->fetchClass);
+            $rows = $stmt->fetchAll(\PDO::FETCH_CLASS | \PDO::FETCH_PROPS_LATE, $this->fetchClass);
+        } else {
+            $rows = $stmt->fetchAll(\PDO::FETCH_OBJ);
         }
-        return $stmt->fetchAll(\PDO::FETCH_OBJ);
+
+        return \Fzr\Collection::make($rows);
     }
 
     protected function quoteIdentifier(string $identifier): string

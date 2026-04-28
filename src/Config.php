@@ -17,6 +17,7 @@ class Config
     const DEFAULT_INI = "app.ini";
     const DEFAULT_ROUTE = "index";
     const DEFAULT_VIEW = "index";
+    const DIR_PUBLIC = "public";
     const DIR_APP   = "app";
     const DIR_CTRL  = "app/controllers";
     const DIR_VIEW  = "app/views";

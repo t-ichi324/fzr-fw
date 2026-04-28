@@ -1,10 +1,11 @@
 <?php
+
 namespace Fzr\Db;
 
 use Fzr\Collection;
 
 /**
- * Database Query Result — encapsulates paginated search results and metadata.
+ * Paginated Collection — encapsulates a slice of data along with pagination metadata.
  *
  * Use to handle the output of `Query::page()` or `Db::page()`.
  * Typical uses: displaying list views with pagination controls, JSON-returning API results.
@@ -16,44 +17,44 @@ use Fzr\Collection;
  * @template T of object
  * @extends Collection<int, T>
  */
-class Result extends Collection
+class Paginated extends Collection
 {
     /** 総件数 */
-    public int $itemCount = 0;
+    public int $total = 0;
     /** 現在ページ */
     public int $currentPage = 1;
     /** 1ページあたり件数 */
     public int $perPage = 20;
     /** 最大ページ数 */
-    public int $maxPage = 1;
+    public int $lastPage = 1;
 
     /**
      * @param array<int, T>|Collection<int, T> $items
-     * @param int $itemCount 総件数（0 の場合は items 件数を使用）
+     * @param int $total 総件数（0 の場合は items 件数を使用）
      * @param int $currentPage 現在ページ（1始まり）
      * @param int $perPage 1ページあたりの件数
      */
-    public function __construct($items = [], int $itemCount = 0, int $currentPage = 1, int $perPage = 20)
+    public function __construct($items = [], int $total = 0, int $currentPage = 1, int $perPage = 20)
     {
         parent::__construct($items);
-        $this->itemCount = $itemCount ?: $this->count();
+        $this->total = $total ?: $this->count();
         $this->currentPage = max(1, $currentPage);
         $this->perPage = $perPage;
-        $this->maxPage = ($perPage > 0)
-            ? (int)max(1, ceil($this->itemCount / $perPage))
-            : ($this->itemCount > 0 ? 1 : 0);
+        $this->lastPage = ($perPage > 0)
+            ? (int)max(1, ceil($this->total / $perPage))
+            : ($this->total > 0 ? 1 : 0);
     }
 
     /** 空判定（総件数ベース） */
     public function isEmpty(): bool
     {
-        return $this->itemCount === 0;
+        return $this->total === 0;
     }
 
     /** 非空判定 */
     public function isNotEmpty(): bool
     {
-        return $this->itemCount !== 0;
+        return $this->total !== 0;
     }
 
     /** 前ページ存在判定 */
@@ -65,25 +66,31 @@ class Result extends Collection
     /** 次ページ存在判定 */
     public function hasNext(): bool
     {
-        return $this->currentPage < $this->maxPage;
+        return $this->currentPage < $this->lastPage;
     }
 
-    /** 開始アイテム番号（1〜） */
-    public function firstItemIndex(): int
+    /** 前ページ番号取得 */
+    public function prevPage(): ?int
     {
-        return $this->itemCount === 0 ? 0 : ($this->currentPage - 1) * $this->perPage + 1;
+        return $this->hasPrev() ? $this->currentPage - 1 : null;
     }
 
-    /** 終了アイテム番号（1〜） */
-    public function lastItemIndex(): int
+    /** 次ページ番号取得 */
+    public function nextPage(): ?int
     {
-        return $this->itemCount === 0 ? 0 : min($this->firstItemIndex() + $this->perPage - 1, $this->itemCount);
+        return $this->hasNext() ? $this->currentPage + 1 : null;
     }
 
-    /** 総件数取得（$itemCount プロパティの別名） */
-    public function total(): int
+    /** 開始アイテム番号（1始まり） */
+    public function from(): int
     {
-        return $this->itemCount;
+        return $this->total === 0 ? 0 : ($this->currentPage - 1) * $this->perPage + 1;
+    }
+
+    /** 終了アイテム番号（1始まり） */
+    public function to(): int
+    {
+        return $this->total === 0 ? 0 : min($this->currentPage * $this->perPage, $this->total);
     }
 
     /** 総行数（Collection の count と同じ） */
@@ -95,12 +102,12 @@ class Result extends Collection
     /** ページネーションリンク生成 */
     public function links(string $baseUrl = '?', string $pageParam = 'page', int $range = 5): string
     {
-        if ($this->maxPage <= 1) return '';
+        if ($this->lastPage <= 1) return '';
         $html = '<nav class="pagination">';
         $sep = (strpos($baseUrl, '?') === false) ? '?' : '&';
         if ($this->hasPrev()) $html .= '<a href="' . h($baseUrl) . $sep . h($pageParam) . '=' . ($this->currentPage - 1) . '">&laquo;</a> ';
         $start = max(1, $this->currentPage - $range);
-        $end   = min($this->maxPage, $this->currentPage + $range);
+        $end   = min($this->lastPage, $this->currentPage + $range);
         for ($i = $start; $i <= $end; $i++) {
             $active = ($i === $this->currentPage) ? ' class="active"' : '';
             $html .= '<a href="' . h($baseUrl) . $sep . h($pageParam) . '=' . $i . '"' . $active . '>' . $i . '</a> ';

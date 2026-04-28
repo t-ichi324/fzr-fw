@@ -2,6 +2,8 @@
 
 namespace Fzr\Db;
 
+use Fzr\Collection;
+
 /**
  * Active Record Entity — maps database tables to typed PHP objects.
  *
@@ -55,12 +57,11 @@ abstract class Entity extends \Fzr\Model
     /**
      * 全取得
      *
-     * @return Result<int, static>
+     * @return \Fzr\Collection<int, static>
      */
-    public static function all(): Result
+    public static function all(): \Fzr\Collection
     {
-        $rows = static::query()->all();
-        return new Result($rows, count($rows));
+        return static::query()->all();
     }
 
     /**

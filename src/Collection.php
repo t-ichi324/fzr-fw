@@ -11,7 +11,7 @@ namespace Fzr;
  * - Implements `ArrayAccess`, `IteratorAggregate`, and `Countable` for native array-like feel.
  * - Provides chainable methods for common transformations.
  * - Supports Generics for type safety with static analyzers.
- * - Used as the base for {@see \Fzr\Db\Result}.
+ * - Used as the base for {@see \Fzr\Db\Paginated}.
  *
  * @template TKey of array-key
  * @template T
