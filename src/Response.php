@@ -267,7 +267,7 @@ class Response
     {
         // 外部URLへのリダイレクトは allow_external_redirect=true の場合のみ許可
         if (preg_match('#^https?://#i', $url)) {
-            $appHost = parse_url(Url::base(), PHP_URL_HOST);
+            $appHost = parse_url(Url::root(), PHP_URL_HOST);
             $targetHost = parse_url($url, PHP_URL_HOST);
             if ($targetHost !== $appHost && !Env::getBool('security.allow_external_redirect', false)) {
                 $url = '/';

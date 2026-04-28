@@ -2,87 +2,122 @@
 namespace Fzr;
 
 /**
- * User Message Helper — manages status messages (Success/Error/Warning) with
- * intelligent lifecycle management.
+ * User Message Helper — manages status messages (Alerts) and Toasts.
  *
- * Messages live in request-scoped memory by default and are only persisted to
- * the session when an HTTP redirect is actually emitted (lazy flashing).
- * This avoids stale-session re-display on refresh and is unaffected by the
- * early {@see session_write_close()} that {@see Response::sendHeaders()} performs.
- *
- * Lifecycle:
- *  1. {@see set()} stores the message in static memory only.
- *  2. {@see Session::start()} invokes {@see snapshot()}, which moves any
- *     prior-request message from `$_SESSION['_flash']` into memory and clears
- *     the session-side copy immediately (while the session is still writable).
- *  3. {@see get()} / {@see has()} read non-destructively from memory; the same
- *     message can be referenced multiple times within one request.
- *  4. {@see Response::emitRedirect()} calls {@see toFlash()} just before
- *     headers are sent, persisting the in-memory message back to the session
- *     for the next request. If no redirect occurs, nothing is persisted.
- *
- * Special case: if you bypass {@see Response::redirect()} (e.g. raw
- * `header('Location: ...')` + `exit`), call {@see toFlash()} explicitly first.
+ * Separates persistent on-page Alerts from temporary floating Toasts.
  */
 class Message {
     const SUCCESS = 'success';
     const ERROR = 'error';
     const WARNING = 'warning';
     const INFO = 'info';
-    const SESSION_KEY = '_msg_flash';
 
-    private static ?array $current = null;
+    const KEY_ALERTS = '_msg_alerts';
+    const KEY_TOASTS = '_msg_toasts';
+
+    private static array $alerts = [];
+    private static array $toasts = [];
     private static bool $snapshotted = false;
 
-    public static function set(string $type, string $message): void {
-        // Ensure prior-request flash is absorbed before we overwrite memory,
-        // even when set() is called before any other session-touching code.
+    /**
+     * アラートを追加（画面内に固定表示される想定）
+     */
+    public static function add(string $type, string $message, string $title = '', array $options = []): void {
         Session::start();
-        self::$current = ['type' => $type, 'message' => $message];
+        self::$alerts[] = self::build($type, $message, $title, $options);
     }
 
+    /**
+     * トーストを追加（画面端に浮かぶ想定）
+     */
+    public static function toast(string $type, string $message, string $title = '', array $options = []): void {
+        Session::start();
+        self::$toasts[] = self::build($type, $message, $title, $options);
+    }
+
+    private static function build(string $type, string $message, string $title, array $options): array {
+        return [
+            'type'    => $type,
+            'message' => $message,
+            'title'   => $title,
+            'options' => $options,
+            'time'    => time(),
+        ];
+    }
+
+    /**
+     * 全てのアラートを取得
+     */
+    public static function all(): array {
+        Session::start();
+        return self::$alerts;
+    }
+
+    /**
+     * 全てのトーストを取得
+     */
+    public static function getToasts(): array {
+        Session::start();
+        return self::$toasts;
+    }
+
+    /**
+     * 下位互換性: 最初の通知を取得
+     */
     public static function get(): ?array {
         Session::start();
-        return self::$current;
+        return self::$alerts[0] ?? self::$toasts[0] ?? null;
     }
 
     public static function has(): bool {
         Session::start();
-        return self::$current !== null;
+        return !empty(self::$alerts) || !empty(self::$toasts);
     }
 
     /**
-     * Persist the in-memory message to the session for the next request.
-     *
-     * Called automatically by {@see Response::emitRedirect()}. Call manually
-     * only when emitting a redirect outside the framework's response pipeline
-     * (e.g. raw `header('Location: ...')` + `exit`). Must be invoked while the
-     * session is still writable (i.e. before {@see Response::sendHeaders()}).
+     * リダイレクト用にフラッシュ保存
      */
     public static function toFlash(): void {
-        if (self::$current === null) return;
-        Session::flash(self::SESSION_KEY, self::$current);
+        if (!empty(self::$alerts)) Session::flash(self::KEY_ALERTS, self::$alerts);
+        if (!empty(self::$toasts)) Session::flash(self::KEY_TOASTS, self::$toasts);
     }
 
     /**
-     * @internal Invoked by {@see Session::start()} immediately after
-     * `session_start()` to lift prior-request flash data into memory and
-     * clear the session-side copy.
+     * セッションから復元
      */
     public static function snapshot(): void {
         if (self::$snapshotted) return;
         self::$snapshotted = true;
-        if (isset($_SESSION['_flash'][self::SESSION_KEY])) {
-            self::$current = $_SESSION['_flash'][self::SESSION_KEY];
-            unset($_SESSION['_flash'][self::SESSION_KEY]);
-            if (empty($_SESSION['_flash'])) {
-                unset($_SESSION['_flash']);
-            }
+
+        // Alerts 復元
+        if (isset($_SESSION['_flash'][self::KEY_ALERTS])) {
+            $flashed = $_SESSION['_flash'][self::KEY_ALERTS];
+            self::$alerts = is_array($flashed) ? (isset($flashed['type']) ? [$flashed] : $flashed) : [];
+            unset($_SESSION['_flash'][self::KEY_ALERTS]);
+        }
+
+        // Toasts 復元
+        if (isset($_SESSION['_flash'][self::KEY_TOASTS])) {
+            $flashed = $_SESSION['_flash'][self::KEY_TOASTS];
+            self::$toasts = is_array($flashed) ? (isset($flashed['type']) ? [$flashed] : $flashed) : [];
+            unset($_SESSION['_flash'][self::KEY_TOASTS]);
+        }
+
+        // クリーンアップ
+        if (isset($_SESSION['_flash']) && empty($_SESSION['_flash'])) {
+            unset($_SESSION['_flash']);
         }
     }
 
-    public static function success(string $message): void { self::set(self::SUCCESS, $message); }
-    public static function error(string $message): void { self::set(self::ERROR, $message); }
-    public static function warning(string $message): void { self::set(self::WARNING, $message); }
-    public static function info(string $message): void { self::set(self::INFO, $message); }
+    // ショートカット (Alerts 用)
+    public static function success(string $message, string $title = ''): void { self::add(self::SUCCESS, $message, $title); }
+    public static function error(string $message, string $title = ''): void { self::add(self::ERROR, $message, $title); }
+    public static function warning(string $message, string $title = ''): void { self::add(self::WARNING, $message, $title); }
+    public static function info(string $message, string $title = ''): void { self::add(self::INFO, $message, $title); }
+
+    // ショートカット (Toasts 用)
+    public static function successToast(string $message, string $title = ''): void { self::toast(self::SUCCESS, $message, $title); }
+    public static function errorToast(string $message, string $title = ''): void { self::toast(self::ERROR, $message, $title); }
+    public static function warningToast(string $message, string $title = ''): void { self::toast(self::WARNING, $message, $title); }
+    public static function infoToast(string $message, string $title = ''): void { self::toast(self::INFO, $message, $title); }
 }
