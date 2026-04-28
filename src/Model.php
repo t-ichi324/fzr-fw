@@ -55,7 +55,14 @@ abstract class Model implements \JsonSerializable
 
     public function toArray(): array
     {
-        return get_object_vars($this);
+        $res = [];
+        $ref = new \ReflectionObject($this);
+        foreach ($ref->getProperties(\ReflectionProperty::IS_PUBLIC) as $prop) {
+            $name = $prop->getName();
+            if ($prop->isStatic()) continue;
+            $res[$name] = $this->$name;
+        }
+        return $res;
     }
 
     public function keyList(): array
@@ -115,10 +122,5 @@ abstract class Model implements \JsonSerializable
     public function getJson(string $key, array $default = []): array
     {
         return DataHelper::asJson($this->get($key), $default);
-    }
-
-    public function getDateTime(string $key, mixed $default = null): ?\DateTime
-    {
-        return DataHelper::asDateTime($this->get($key), $default);
     }
 }

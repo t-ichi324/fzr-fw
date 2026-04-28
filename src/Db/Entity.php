@@ -22,8 +22,8 @@ abstract class Entity extends \Fzr\Model
     protected static ?string $connectionKey = null;
     protected static ?string $table = null;
     protected static ?string $primaryKey = 'id';
-    /** DB から取得した時の初期状態 */
-    protected array $_original = [];
+
+    private ?array $_original = null;
 
     /** テーブル名取得 */
     public static function tableName(): string
@@ -188,15 +188,15 @@ abstract class Entity extends \Fzr\Model
     public function getDirty(): array
     {
         $current = $this->toArray();
+        // まだ初期状態がない（新規）場合は null 以外をすべて対象にする
+        if ($this->_original === null) {
+            return array_filter($current, fn($v) => $v !== null);
+        }
+
         $dirty = [];
         foreach ($current as $key => $value) {
-            // まだ初期状態がない（新規）場合は null 以外をすべて対象にする
-            if (!array_key_exists($key, $this->_original)) {
-                if ($value !== null) $dirty[$key] = $value;
-                continue;
-            }
             // 変更がある場合のみ対象にする
-            if ($value !== $this->_original[$key]) {
+            if (!array_key_exists($key, $this->_original) || $value !== $this->_original[$key]) {
                 $dirty[$key] = $value;
             }
         }
@@ -215,17 +215,17 @@ abstract class Entity extends \Fzr\Model
         $isUpdate = ($pkVal !== null && $pkVal !== '' && $pkVal !== 0);
 
         if ($isUpdate) {
-            // UPDATE: 変更があった（Dirty）データのみを更新
+            // UPDATE: 変更があったデータのみを更新
             $dirty = $this->getDirty();
             if (empty($dirty)) return true; // 変更なし
 
-            unset($dirty[$pk]); // PK は更新対象外
+            unset($dirty[$pk]);
             $ok = static::query()->where($pk, $pkVal)->update($dirty) >= 0;
             if ($ok) $this->syncOriginal();
             return $ok;
         }
 
-        // INSERT: null 以外のデータを対象にする（DB デフォルト値を活かすため）
+        // INSERT: null 以外を対象（DB デフォルト値を活かす）
         $data = $this->toArray();
         if (isset($data[$pk]) && ($data[$pk] === null || $data[$pk] === '' || $data[$pk] === 0)) {
             unset($data[$pk]);
