@@ -219,6 +219,25 @@ class Session extends Store
         }
     }
 
+    /**
+     * セッションへの書き込みを確定し、ロックを解放する。
+     *
+     * file ドライバはリクエスト終了までセッションファイルを排他ロックするため、
+     * 同一セッションIDの並行リクエスト (AJAX/別タブ/プリフェッチ等) は
+     * このロックを待ってシリアル化される。書き込みが終わった時点で本メソッドを
+     * 呼ぶとロックが即時解放され、後続のDB処理等が他リクエストをブロックしない。
+     *
+     * 呼び出し後に $_SESSION への書き込みは PHP セッションには反映されない
+     * (read のみ可)。再度書きたければ Session::start() で開き直す。
+     */
+    public static function close(): void
+    {
+        if (session_status() === PHP_SESSION_ACTIVE) {
+            session_write_close();
+        }
+        self::$started = false;
+    }
+
     public static function regenerate(): void
     {
         self::start();
