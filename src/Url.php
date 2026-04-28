@@ -37,7 +37,7 @@ class Url
                 $query = array_merge($query, $p);
             } elseif (is_string($p) || is_numeric($p)) {
                 $p = (string)$p;
-                // 途中に絶対URLが来たら、それまでのパスをリセット
+                // 絶対URLやアプリ内絶対パス（/）が来たら、それまでのパスをリセット
                 if (self::isAbsolute($p)) {
                     $pathParts = [$p];
                 } else {
@@ -62,19 +62,21 @@ class Url
     {
         if (empty($parts)) return self::root();
 
-        $first = $parts[0];
-        $isAbsolute = self::isAbsolute($first);
-        
         $resolved = [];
+        $schemeHost = '';
+
         foreach ($parts as $p) {
-            $p = str_replace('\\', '/', $p);
-            // スキーム(https://)を一時退避
-            $scheme = '';
-            if (preg_match('#^([a-z]+://[^/]+)(.*)#i', $p, $matches)) {
-                $scheme = $matches[1];
-                $p = $matches[2];
-            }
+            $p = str_replace('\\', '/', (string)$p);
             
+            // スキームとホストの検出 (http://domain.com)
+            if (preg_match('#^([a-z][a-z0-9+\-.]*://[^/]+)(.*)#i', $p, $matches)) {
+                $schemeHost = $matches[1];
+                $p = $matches[2];
+                $resolved = []; // フルURLが来たらパスをリセット
+            } elseif (str_starts_with($p, '/')) {
+                $resolved = []; // アプリ内絶対パスならリセット
+            }
+
             foreach (explode('/', $p) as $part) {
                 if ($part === '' || $part === '.') continue;
                 if ($part === '..') {
@@ -83,23 +85,17 @@ class Url
                     $resolved[] = $part;
                 }
             }
-            
-            if ($scheme) {
-                $resolved = [$scheme . '/' . implode('/', $resolved)];
-            }
         }
 
-        $result = implode('/', $resolved);
-        if ($isAbsolute && !str_contains($result, '://')) {
-            return '/' . ltrim($result, '/');
-        }
+        $path = implode('/', $resolved);
         
-        // 相対パスの場合はrootをベースにする
-        if (!self::isAbsolute($result)) {
-            return rtrim(self::root(), '/') . '/' . ltrim($result, '/');
+        // スキームがある場合はそのまま結合
+        if ($schemeHost) {
+            return $schemeHost . '/' . ltrim($path, '/');
         }
 
-        return $result;
+        // スキームがない場合はアプリルート（サブディレクトリ含む）をベースにする
+        return rtrim(self::root(), '/') . '/' . ltrim($path, '/');
     }
 
     /** クエリパラメータの付与 */
@@ -152,6 +148,6 @@ class Url
     public static function api(...$parts): string
     {
         $prefix = Env::get('api_prefix', 'api');
-        return self::get(self::root($prefix), ...$parts);
+        return self::get($prefix, ...$parts);
     }
 }

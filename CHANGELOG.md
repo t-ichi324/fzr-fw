@@ -2,6 +2,21 @@
 
 ## [Unreleased]
 
+### Added
+- **Core: データアクセス層の Collection 統一**:
+    - `Db::select()`, `Query::all()`, `Entity::all()` 等の複数行取得メソッドの戻り値を、従来の `array` から `Collection` オブジェクトへ刷新。
+    - メソッドチェーンによる `map`, `filter`, `where`, `pluck` などの直感的なデータ操作をサポート。
+    - `isEmpty()`, `isNotEmpty()` による型安全な空判定を導入。
+- **Core: ページネーションクラスの刷新 (Paginated)**:
+    - `Db\Result` を `Db\Paginated` へリネームし、`Collection` を継承する形に整理。
+    - ページ情報（`total`, `lastPage`, `currentPage` 等）を保持しつつ、全件取得結果と同様のリスト操作メソッドを利用可能に。
+- **Core: Path / Url 機能の強化**:
+    - `Path::get()` にディレクトリ結合と正規化を集約し、OSを問わない堅牢なパス解決を実現。
+    - `Url::current()` を追加。現在のリクエストパスに基づいた相対/絶対URLの生成を容易に。
+    - `Url::api()` を追加。`app.ini` の `api_prefix` 設定と連動した API エンドポイント生成をサポート。
+- **Config: 新しい設定キーの追加**:
+    - `app.assets_version`, `api_prefix`, および各種 `path.*` (app, ctrl, view, models, public) を `ENV.md` に定義。
+
 ### Changed
 - **Form: 入力値の自動 Trim 機能を導入**:
     - `Form` へのデータバインド時に文字列の前後スペースを自動で削除。
@@ -13,7 +28,10 @@
     - `FormValidator`: `min()`, `max()`, `minValue()`, `maxValue()` メソッドを整備。
     - Attributes: `#[Min]`, `#[Max]`, `#[MinValue]`, `#[MaxValue]` を整備。
     - エラーメッセージのプレースホルダーを `:len` から `:min` / `:max` へ変更。
-- **プロジェクト構成の再整理**: フレームワーク本体を `fzr/fw` ディレクトリへ配置。`fzr/kit` (旧 `php-libs`) と共に `fzr` ブランドのモノレポ風構成に統合。
+
+### Fixed
+- **Db\Query: chunk() メソッドの無限ループを修正**: `Collection` 移行に伴い、`empty()` での判定が常に false になる問題を `isEmpty()` へ修正。
+- **Core: 名前空間の解決を安定化**: `Entity` や `Query` の戻り値型宣言を完全修飾名 (`\Fzr\Collection`) に統一し、IDE や実行環境での名前解決エラーを解消。
 
 ### Added
 - **HttpClient 実装**: cURLベースの軽量・高機能HTTPクライアントを新規実装。マジックメソッド（`__callStatic`, `__call`）の採用により、静的呼び出し（`HttpClient::get()`）とインスタンスチェーン（`->withToken()->post()`）の両方を簡潔に記述可能。

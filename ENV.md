@@ -74,34 +74,15 @@ temp = /tmp/fzr-cache
 output = stderr ; Cloud Logging 等に構造化ログとして送る
 ```
 
-### 4. レンタルサーバー (エックスサーバー、ロリポップ等)
-OSレベルの環境変数が設定しづらい環境では、`include_ini` を活用して「公開ディレクトリより上」に置いた秘密ファイルを安全に読み込みます。
-
-**`/home/user/app/app.ini` (リポジトリ管理)**
-```ini
-; 公開ディレクトリより上の階層にある秘密ファイルを読み込む
-include_ini = "../../secrets/db.ini"
-
-[app]
-name = "My Production Website"
-```
-
-**`/home/user/secrets/db.ini` (サーバーに手動で配置)**
-```ini
-[db]
-host = "mysql123.xserver.jp"
-database = "user_dbname"
-username = "user_dbuser"
-password = "real_password"
-```
-
 ---
 
 ## [app] - 基本設定
 | キー | 説明 | デフォルト |
 | :--- | :--- | :--- |
 | `app.name` | アプリケーションの名称 | `Fzr App` |
-| `app.key` | 暗号化キー (32文字) | (自動生成) |
+| `app.version` | アプリケーションのバージョン | `1.0.0` |
+| `app.assets_version` | 静的ファイルのキャッシュバスト用バージョン | (空) |
+| `app.key` | 暗号化・ハッシュ用キー (32文字) | (自動生成) |
 | `app.debug` | デバッグモード (詳細エラー表示) | `false` |
 | `app.lang` | 言語設定 (`ja`, `en` 等) | `ja` |
 | `app.timezone` | タイムゾーン | `Asia/Tokyo` |
@@ -121,14 +102,22 @@ password = "real_password"
 | キー | 説明 | デフォルト |
 | :--- | :--- | :--- |
 | `storage.driver` | デフォルト保存先 (`local`, `gcs`) | `local` |
+| `storage.default_disk` | デフォルトで使用するディスク名 | `default` |
 | `storage.public_disk` | 公開用ディスクの名称 | `public` |
 
 ## [path] - ディレクトリパス設定
-書き込み制限がある環境や、ディレクトリ構造が特殊な場合に上書きします。
-- `path.storage`: ストレージルート
-- `path.db`: DBファイル保存先
-- `path.log`: ログ出力先
-- `path.temp`: 一時ファイル保存先
+プロジェクト構造に合わせてディレクトリの物理パスを指定します。
+| キー | 説明 | デフォルト |
+| :--- | :--- | :--- |
+| `path.public` | 公開ディレクトリ (Document Root) | `public` |
+| `path.app` | アプリケーションソース (Controllers/Models等) | `app` |
+| `path.ctrl` | コントローラーの配置場所 | `app/controllers` |
+| `path.view` | ビューテンプレートの配置場所 | `app/views` |
+| `path.models` | モデル・エンティティの配置場所 | `app/models` |
+| `path.db` | DB関連ファイル（SQLite/Migrations等）の保存先 | `storage/db` |
+| `path.storage` | ストレージルート | `storage` |
+| `path.log` | ログ出力先 | `storage/logs` |
+| `path.temp` | 一時ファイル・キャッシュ保存先 | `storage/temp` |
 
 ## [log] - ロギング
 | キー | 説明 | デフォルト |
@@ -136,35 +125,41 @@ password = "real_password"
 | `log.output` | 出力先 (`file`, `stderr`, `null`) | `file` |
 | `log.access` | アクセスログの記録 | `true` |
 | `log.debug` | デバッグログの出力 | `app.debug` 連動 |
-| `log.db_sel` | SELECTクエリの記録 | `app.debug` 連動 |
+| `log.db_sel` | SELECTクエリ（参照系）の記録 | `app.debug` 連動 |
+| `log.db_exe` | 更新系（INSERT/UPDATE/DELETE）クエリの記録 | `true` |
 
----
-
-## [session] / [cookie] - 接続・状態保持
-| セクション | キー | 説明 | デフォルト値 |
-| :--- | :--- | :--- | :--- |
+## [session] - 接続・状態保持
+| キー | 説明 | デフォルト値 |
+| :--- | :--- | :--- |
 | `session.name` | セッションクッキー名 | `SID` |
 | `session.save_path` | セッションファイルの保存場所 | `storage/temp/sessions` |
-| `session.auth_key` | ログイン情報のハッシュ用キー | (app.keyを使用) |
-| `cookie.domain` | クッキーの有効ドメイン | - |
-| `cookie.secure` | HTTPSのみに制限するか | (環境に応じて自動) |
-| `cookie.httponly` | JSからのアクセスを禁止するか | `true` |
+| `session.domain` | クッキーの有効ドメイン | - |
+| `session.secure` | HTTPSのみに制限するか | (環境に応じて自動) |
+| `session.httponly` | JSからのアクセスを禁止するか | `true` |
 
 ## [security] - セキュリティ設定
 | キー | 説明 | デフォルト値 |
 | :--- | :--- | :--- |
 | `security.csrf_name` | CSRFトークンのキー名 | `csrf_token` |
 | `security.allow_external_redirect` | 外部URLへのリダイレクト許可 | `false` |
+| `ip.whitelist` | アクセス許可IP（カンマ区切り） | - |
+| `trusted_proxies` | 信頼するプロキシIP（カンマ区切り、LB経由時など） | - |
 
-## [view] - ビュー設定
+## [api] - API設定
 | キー | 説明 | デフォルト値 |
 | :--- | :--- | :--- |
-| `view.base_template` | 基本となるベーステンプレート | `@layouts/base.php` |
-| `view.error_prefix` | エラービューの接頭辞 | `errors/` |
+| `api_prefix` | APIエンドポイントの接頭辞 | `api` |
+
+## [validator] - バリデーションメッセージ
+バリデーションエラー時に表示する文言をカスタマイズできます。
+- `validator.messages.required`: 必須項目エラー時
+- `validator.messages.email`: メール形式エラー時
+- `validator.messages.numeric`: 数値形式エラー時
+- (その他、各バリデーションルール名に対応したメッセージを設定可能)
 
 ---
 
-# 高高度な設定例
+# 高度な設定例
 
 ### 1. Cloud Run / Cloud Logging 対応 (stderr出力)
 コンテナ環境など、ログを標準エラー出力に JSON 構造化して出したい場合。
@@ -174,6 +169,19 @@ password = "real_password"
 output = stderr
 access = true
 debug = false
+```
+
+### 2. API専用サーバーの構成
+APIとしての利用に特化させる場合。
+
+```ini
+api_prefix = v1
+
+[app]
+force_https = true
+
+[security]
+allow_external_redirect = false
 ```
 
 ### 3. 一時ファイルやセッションを /tmp に逃がす場合
