@@ -22,6 +22,8 @@ abstract class Entity extends \Fzr\Model
     protected static ?string $connectionKey = null;
     protected static ?string $table = null;
     protected static ?string $primaryKey = 'id';
+    /** DB から取得した時の初期状態 */
+    protected array $_original = [];
 
     /** テーブル名取得 */
     public static function tableName(): string
@@ -175,6 +177,32 @@ abstract class Entity extends \Fzr\Model
         return $this->$pk ?? null;
     }
 
+    /** 現在の状態を初期状態として同期する */
+    public function syncOriginal(): static
+    {
+        $this->_original = $this->toArray();
+        return $this;
+    }
+
+    /** 変更されたデータ（Dirty Data）のみを取得 */
+    public function getDirty(): array
+    {
+        $current = $this->toArray();
+        $dirty = [];
+        foreach ($current as $key => $value) {
+            // まだ初期状態がない（新規）場合は null 以外をすべて対象にする
+            if (!array_key_exists($key, $this->_original)) {
+                if ($value !== null) $dirty[$key] = $value;
+                continue;
+            }
+            // 変更がある場合のみ対象にする
+            if ($value !== $this->_original[$key]) {
+                $dirty[$key] = $value;
+            }
+        }
+        return $dirty;
+    }
+
     /**
      * 保存（PK があれば UPDATE、なければ INSERT）
      *
@@ -182,25 +210,32 @@ abstract class Entity extends \Fzr\Model
      */
     public function save(): bool
     {
-        $pk   = static::primaryKeyName();
-        $data = $this->toArray();
-
+        $pk    = static::primaryKeyName();
         $pkVal = $this->pkValue();
+        $isUpdate = ($pkVal !== null && $pkVal !== '' && $pkVal !== 0);
 
-        if ($pkVal !== null && $pkVal !== '' && $pkVal !== 0) {
-            // UPDATE: PK 自身は SET 句から除外
-            $updateData = $data;
-            unset($updateData[$pk]);
-            return static::query()->where($pk, $pkVal)->update($updateData) >= 0;
+        if ($isUpdate) {
+            // UPDATE: 変更があった（Dirty）データのみを更新
+            $dirty = $this->getDirty();
+            if (empty($dirty)) return true; // 変更なし
+
+            unset($dirty[$pk]); // PK は更新対象外
+            $ok = static::query()->where($pk, $pkVal)->update($dirty) >= 0;
+            if ($ok) $this->syncOriginal();
+            return $ok;
         }
 
-        // INSERT: PK が null/空なら除外して AUTOINCREMENT に任せる
+        // INSERT: null 以外のデータを対象にする（DB デフォルト値を活かすため）
+        $data = $this->toArray();
         if (isset($data[$pk]) && ($data[$pk] === null || $data[$pk] === '' || $data[$pk] === 0)) {
             unset($data[$pk]);
         }
-        $newId = static::query()->insert($data);
+        $insertData = array_filter($data, fn($v) => $v !== null);
+
+        $newId = static::query()->insert($insertData);
         if ($newId) {
             $this->$pk = $newId;
+            $this->syncOriginal();
         }
         return (bool)$newId;
     }

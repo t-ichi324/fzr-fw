@@ -50,7 +50,14 @@ class IndexController extends Controller
 
         // Simple demo check (ID: admin / PW: password)
         if ($id === 'admin' && $pw === 'password') {
-            Auth::login((object)['id' => 1, 'name' => 'Admin'], ['admin']);
+
+            $obj = new \stdClass();
+            $obj->id = 1;
+            $obj->name = 'Admin';
+            $obj->email = 'admin@example.com';
+            $obj->roles = 'admin';
+
+            Auth::login($obj);
             Message::success('Welcome back!');
             return Response::redirect('dashboard');
         }

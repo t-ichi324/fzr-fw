@@ -2,7 +2,7 @@
 -- email: admin@example.com / password: admin
 -- ※ 本番環境では必ずパスワードを変更してください
 
-INSERT OR IGNORE INTO users (name, email, password, role)
+INSERT OR IGNORE INTO users (name, email, password, roles)
 VALUES (
     'Administrator',
     'admin@example.com',

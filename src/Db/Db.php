@@ -82,6 +82,9 @@ class Db
         Logger::db($connectionKey, 3, $sql, $params);
         if ($fetchClass) {
             $rows = $stmt->fetchAll(\PDO::FETCH_CLASS | \PDO::FETCH_PROPS_LATE, $fetchClass);
+            foreach ($rows as $row) {
+                if (method_exists($row, 'syncOriginal')) $row->syncOriginal();
+            }
         } else {
             $rows = $stmt->fetchAll(\PDO::FETCH_OBJ);
         }
@@ -119,6 +122,9 @@ class Db
 
         if ($fetchClass) {
             $rows = $stmt->fetchAll(\PDO::FETCH_CLASS | \PDO::FETCH_PROPS_LATE, $fetchClass);
+            foreach ($rows as $row) {
+                if (method_exists($row, 'syncOriginal')) $row->syncOriginal();
+            }
         } else {
             $rows = $stmt->fetchAll(\PDO::FETCH_OBJ);
         }

@@ -45,14 +45,13 @@ class Auth extends Store
     }
 
     /** ログイン */
-    public static function login(object $user, array $roles = [], bool $regenerate = true, bool $remember = false): void
+    public static function login(object $user, bool $regenerate = true, bool $remember = false): void
     {
         $key = self::sessionKey();
         self::replace($user);
-        self::$roles = $roles;
+        self::$roles = null; // キャッシュをクリア
         $data = [
             'user' => $user,
-            'roles' => $roles,
         ];
         Session::set($key, $data);
         if ($regenerate) Session::regenerate();
@@ -90,7 +89,7 @@ class Auth extends Store
         $auth = Session::get($key);
         if (is_array($auth) && isset($auth['user'])) {
             self::fill($auth['user']);
-            self::$roles = $auth['roles'] ?? [];
+            self::$roles = null; // getRolesで再取得させる
             return true;
         }
 
@@ -101,8 +100,8 @@ class Auth extends Store
             $restoredUser = call_user_func(self::$rememberResolver, $token);
 
             if ($restoredUser) {
-                // 復元成功（ロールは別途解決するか、ユーザーオブジェクトから取る前提）
-                self::login($restoredUser, $restoredUser->roles ?? [], false);
+                // 復元成功
+                self::login($restoredUser, false);
                 return true;
             } else {
                 // 不正なトークンなら消す
@@ -185,8 +184,13 @@ class Auth extends Store
     {
         if (!self::check()) return [];
 
+        if (self::$roles !== null) return self::$roles;
+
         $role_data = self::get(Env::get("auth.user_roles_name", "roles"), "");
-        if (is_array($role_data)) return $role_data; // すでに配列ならそのまま返す
+        if (is_array($role_data)) {
+            self::$roles = $role_data;
+            return self::$roles;
+        }
 
         $role_text = (string)$role_data;
         $role_format = Env::get("auth.user_roles_format", "csv");
@@ -195,17 +199,15 @@ class Auth extends Store
         if (empty($role_format)) {
             $roles = [$role_text];
         } else if ($role_format === "csv") {
-            $roles = array_map('trim', explode(',', $role_text));
+            $roles = array_filter(array_map('trim', explode(',', $role_text)));
         } elseif ($role_format === "json") {
             $roles = json_decode($role_text, true) ?: [];
         } elseif (strlen($role_format) === 1) {
-            $roles = array_map('trim', explode($role_format, $role_text));
+            $roles = array_filter(array_map('trim', explode($role_format, $role_text)));
         }
 
-        if (!isset(self::$roles)) {
-            self::$roles = $roles;
-        }
-        return $roles;
+        self::$roles = array_values($roles);
+        return self::$roles;
     }
     public static function roles(): array
     {

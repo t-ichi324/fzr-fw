@@ -763,6 +763,9 @@ class Query
         $rows = [];
         if ($this->fetchClass !== null) {
             $rows = $stmt->fetchAll(\PDO::FETCH_CLASS | \PDO::FETCH_PROPS_LATE, $this->fetchClass);
+            foreach ($rows as $row) {
+                if (method_exists($row, 'syncOriginal')) $row->syncOriginal();
+            }
         } else {
             $rows = $stmt->fetchAll(\PDO::FETCH_OBJ);
         }
