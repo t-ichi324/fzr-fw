@@ -30,27 +30,27 @@ class Breadcrumb
      *
      * @param string $label 表示名
      * @param string|null $url URL（null の場合はリンクなしの現在地として扱う）
-     * @return static
+     * @return self
      */
-    public static function add(string $label, ?string $url = null): string
+    public static function add(string $label, ?string $url = null): self
     {
         self::$items[] = [
             'label' => $label,
             'url'   => $url ? Url::get($url) : null,
         ];
-        return static::class;
+        return new self();
     }
 
     /**
      * ホームを明示的に追加
      *
      * @param string|null $label ホームの表示名（nullならデフォルトを使用）
-     * @return static
+     * @return self
      */
-    public static function home(?string $label = null): string
+    public static function home(?string $label = null): self
     {
         self::add($label ?? self::$homeLabel, self::$homeUrl);
-        return static::class;
+        return new self();
     }
 
     /**
