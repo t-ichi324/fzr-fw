@@ -84,9 +84,9 @@ if (!function_exists('redirect')) {
 
 if (!function_exists('view')) {
     /** ビュー応答生成 */
-    function view(string $template, ?string $baseTemplate = null): array
+    function view(string $template, array $data = [], ?string $baseTemplate = null): array
     {
-        return \Fzr\Response::view($template, $baseTemplate);
+        return \Fzr\Response::view($template, $data, $baseTemplate);
     }
 }
 
