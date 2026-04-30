@@ -28,10 +28,14 @@
     - `FormValidator`: `min()`, `max()`, `minValue()`, `maxValue()` メソッドを整備。
     - Attributes: `#[Min]`, `#[Max]`, `#[MinValue]`, `#[MaxValue]` を整備。
     - エラーメッセージのプレースホルダーを `:len` から `:min` / `:max` へ変更。
+- **Auth: login() シグネチャの修正**: 第2引数を roles 配列から `bool $regenerate` へ修正。ロール情報はユーザーオブジェクトから自動抽出される仕様に準拠。
+- **Core: Result クラスの廃止と移行**: 内部的に `Result` と呼称されていたクラスを `Paginated` (ページネーション) および `Collection` (全件取得) へ完全に移行。
 
 ### Fixed
-- **Db\Query: chunk() メソッドの無限ループを修正**: `Collection` 移行に伴い、`empty()` での判定が常に false になる問題を `isEmpty()` へ修正。
-- **Core: 名前空間の解決を安定化**: `Entity` や `Query` の戻り値型宣言を完全修飾名 (`\Fzr\Collection`) に統一し、IDE や実行環境での名前解決エラーを解消。
+- **Db\Query: chunk() メソッドの無限ループを修正**: `Collection` 移行に伴い、`empty()` での判定が常に false になる問題を `isEmpty()` へ修正.
+- **Core: 名前空間の解決を安定化**: `Entity` や `Query` の戻り値型宣言を完全修飾名 (`\Fzr\Collection`) に統一し、IDE や実行環境での名前解決エラーを解消.
+- **Documentation: AI 指示書 (AI.md) の最新化**: `Auth::login()` の引数型、`Result` クラスのリネーム、および属性の解決順序に関する記述を現状の実装と一致するように修正.
+- **Documentation: README.md の整合性向上**: 削除済みクラス `FileInfo`/`DirectoryInfo` の記述を削除.
 
 ### Added
 - **HttpClient 実装**: cURLベースの軽量・高機能HTTPクライアントを新規実装。マジックメソッド（`__callStatic`, `__call`）の採用により、静的呼び出し（`HttpClient::get()`）とインスタンスチェーン（`->withToken()->post()`）の両方を簡潔に記述可能。

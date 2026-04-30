@@ -107,7 +107,7 @@ GET  /login/login→ controller=login, action=login  → LoginController::login(
 | `src/Db/Db.php` | `Db` | DBスタティックファサード（`tables()`, `schema()`, `generateModels()` 含む） |
 | `src/Db/Connection.php` | `Connection` | PDOラッパー（mysql/pgsql/sqlite） |
 | `src/Db/Query.php` | `Query` | クエリビルダー |
-| `src/Db/Result.php` | `Result` | 検索結果セット（`Collection` 継承） |
+| `src/Db/Paginated.php` | `Paginated` | 検索結果セット（`Collection` 継承） |
 | `src/Db/Entity.php` | `Entity` | ActiveRecord基底（`Model` 継承） |
 | `src/Db/Migration.php` | `Migration` | マイグレーション実行 |
 | `src/Db/LiteDb.php` | `LiteDb` | SQLiteファサード（`Db` への委譲） |
@@ -144,7 +144,7 @@ Fzr uses **Class Aliases** to reduce context overhead. All core classes are avai
 | `Cookie` | `get/set/has/remove($key)` |
 | `Db` | `table($t)`, `select($sql,$p)`, `execute($sql,$p)`, `transaction($fn)`, `migrate()`, `tables()`, `schema($t)`, `generateModels($dir, $force, $tables)` |
 | `Command` | `handle(): int` (実装必須), `line/info/success/warn/error($msg)`, `arg($n)`, `hasFlag($flag)`, `option($key)` |
-| `Entity` | ActiveRecord — see section below. `find($id): ?static`, `first($field, $val): ?static`, `where()->first()`, `all(): Result<static>` |
+| `Entity` | ActiveRecord — see section below. `find($id): ?static`, `first($field, $val): ?static`, `where()->first()`, `all(): Collection<static>` |
 | `DbQuery` | Chainable query builder |
 | `Storage` | `disk($name)->put/get/delete/url($path)`, `public()->...`, `private()->...` |
 | `Cache` | `get($key, $ttl, $fn)` |
@@ -207,7 +207,7 @@ if (!$user) {
     Message::error('Invalid credentials.');
     return Response::redirect('login');
 }
-Auth::login($user, [$user->role]); // second arg = roles array
+Auth::login($user, true); // second arg = regenerate session (bool)
 return Response::redirect('/');
 
 // Logout
@@ -334,14 +334,14 @@ class Post extends Entity {
 // Retrieval
 $post  = Post::find(1);                          // by PK, returns ?Post
 $post  = Post::first('slug', $slug);             // 条件1件取得, returns ?Post（型が確定するので推奨）
-$posts = Post::all();                            // Result<Post> ← Resultオブジェクト（links()等が使える）
+$posts = Post::all();                            // Collection<Post> ← Collectionオブジェクト（links()等は不可）
 $posts = Post::where('published', 1)
              ->orderBy('created_at', 'DESC')
              ->all();                            // array<Post> ← 生配列（Result ではない）
 
 // Pagination
 $result = Post::where('published', 1)->page(Request::getInt('page', 1), 20);
-echo $result->links();                           // HTML pagination links
+echo $result->links();                           // HTML pagination links (Paginated オブジェクト)
 
 // Create / Update / Delete
 $id = Post::create(['title' => 'Hello', 'body' => '...', 'created_at' => date('Y-m-d H:i:s')]);
@@ -370,7 +370,7 @@ $user = User::firstOrCreate(['email' => $email], ['name' => $name, 'password' =>
 ## Database — Raw / Facade
 
 ```php
-// SELECT → Result (iterable, countable)
+// SELECT → Collection (iterable, countable)
 $rows = Db::select("SELECT * FROM posts WHERE id > :id", ['id' => 10]);
 
 // INSERT / UPDATE / DELETE → affected rows
@@ -589,7 +589,7 @@ assert(Post::find($id) !== null);
 ### ログイン機能実装時の注意
 
 - **`logout()` は `Controller` を継承すること**: `AuthController` にすると未ログインユーザーが `/logout` にアクセスした際に 401 → `LOGIN_PAGE` リダイレクトになる。ログアウト処理は認証不要なので通常の `Controller` を使う。
-- **`Auth::login()` の第2引数は配列必須**: `Auth::login($user, $user->role)` は型エラー。`Auth::login($user, [$user->role])` のように配列で渡すこと。roles が複数ある場合は `explode(',', $user->roles)` 等で変換する。
+- **`Auth::login()` の第2引数は bool**: `Auth::login($user, true)` のように、セッション再生成を行うかどうかの真偽値を渡す。ロール情報はユーザーオブジェクトのプロパティから自動的に取得される。
 - **`LOGIN_PAGE` 定数は Engine が自動定義**: `AuthController` で 401 が発生すると `LOGIN_PAGE` にリダイレクトされる。この定数は Engine 初期化時に `app.ini` の `app.login_page`（デフォルト: `"login"`）から自動定義されるため、開発者が `define()` する必要はない。変更する場合は `app.ini` で設定する。
 - **条件付き1件取得は `first()` を使う**: 単純条件なら `User::first('email', $email)` を使うと戻り型が `?static`（= `?User`）として確定し、IDE補完・AI生成どちらも正確に機能する。複雑な条件（複数 where / orderBy 等）では `where()->first()` を使い、`/** @var User|null $user */` を付ける。
 
