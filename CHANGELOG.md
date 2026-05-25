@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+### Changed
+- **Request: input() メソッドへのパラメータ取得一本化と API スリム化**:
+    - 全てのリクエストパラメータ（GET/POST/JSON）を安全にマージして取得する `Request::input()` 系の型付きメソッド（`inputInt`, `inputFloat`, `inputBool`, `inputArray`）を新設。
+    - 組み合わせ爆発を起こしていた `param*`, `get*`, `post*` などの古いパラメータ取得メソッド群（計15メソッド）を完全に削除。
+    - 各種ドキュメント（`AI.md`, `README.md`）のコード例や説明を `input` 主軸の記述に更新。
+
 ### Added
 - **Core: データアクセス層の Collection 統一**:
     - `Db::select()`, `Query::all()`, `Entity::all()` 等の複数行取得メソッドの戻り値を、従来の `array` から `Collection` オブジェクトへ刷新。

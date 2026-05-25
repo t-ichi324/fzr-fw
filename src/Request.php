@@ -62,42 +62,61 @@ class Request
         return self::$__cache[__FUNCTION__];
     }
 
-    /** リクエスト値取得（G+P） */
-    public static function param(string $key, $default = null): mixed
+
+    /**
+     * 全てのリクエストデータ（GET、POST、およびJSONペイロード）をマージして取得
+     */
+    public static function allInputs(): array
     {
-        return self::_vg(array_merge($_GET, $_POST), $key, $default);
+        if (!isset(self::$__cache['all_inputs'])) {
+            $payload = [];
+            if (self::isJsonRequest()) {
+                if (!isset(self::$__cache['json_payload'])) {
+                    self::$__cache['json_payload'] = [];
+                    $raw = @file_get_contents('php://input') ?: '';
+                    if ($raw !== '') {
+                        $json = json_decode($raw, true);
+                        if (is_array($json)) self::$__cache['json_payload'] = $json;
+                    }
+                }
+                $payload = self::$__cache['json_payload'];
+            }
+            self::$__cache['all_inputs'] = array_merge($_GET, $_POST, $payload);
+        }
+        return self::$__cache['all_inputs'];
     }
 
     /** GET, POST, もしくは JSON ペイロードから値を取得 */
     public static function input(string $key, $default = null): mixed
     {
-        if (self::isJsonRequest()) {
-            if (!isset(self::$__cache['json_payload'])) {
-                self::$__cache['json_payload'] = [];
-                $raw = @file_get_contents('php://input') ?: '';
-                if ($raw !== '') {
-                    $json = json_decode($raw, true);
-                    if (is_array($json)) self::$__cache['json_payload'] = $json;
-                }
-            }
-            if (array_key_exists($key, self::$__cache['json_payload'])) {
-                return self::$__cache['json_payload'][$key];
-            }
-        }
-        return self::param($key, $default);
+        return self::_vg(self::allInputs(), $key, $default);
     }
 
-    /** GET値取得 */
-    public static function get(string $key, $default = null): mixed
+    /** GET, POST, もしくは JSON ペイロードから配列値を取得 */
+    public static function inputArray(string $key, array $default = []): array
     {
-        return self::_vg($_GET, $key, $default);
+        return self::_vgAry(self::allInputs(), $key, $default);
     }
 
-    /** POST値取得 */
-    public static function post(string $key, $default = null): mixed
+    /** GET, POST, もしくは JSON ペイロードから数値を取得 */
+    public static function inputInt(string $key, int $def = 0): int
     {
-        return self::_vg($_POST, $key, $default);
+        return self::_vgInt(self::allInputs(), $key, $def);
     }
+
+    /** GET, POST, もしくは JSON ペイロードからFloat取得 */
+    public static function inputFloat(string $key, float $def = 0.0): float
+    {
+        return self::_vgFloat(self::allInputs(), $key, $def);
+    }
+
+    /** GET, POST, もしくは JSON ペイロードから真偽値を取得 */
+    public static function inputBool(string $key, bool $def = false): bool
+    {
+        return self::_vgBool(self::allInputs(), $key, $def);
+    }
+
+
 
     /** ファイル取得 */
     public static function file(string $key): ?array
@@ -105,77 +124,7 @@ class Request
         return $_FILES[$key] ?? null;
     }
 
-    /** 配列値取得（G+P） */
-    public static function paramArray(string $key, array $default = []): array
-    {
-        return self::_vgAry(array_merge($_GET, $_POST), $key, $default);
-    }
 
-    /** GET配列値取得 */
-    public static function getArray(string $key, array $default = []): array
-    {
-        return self::_vgAry($_GET, $key, $default);
-    }
-
-    /** POST配列値取得 */
-    public static function postArray(string $key, array $default = []): array
-    {
-        return self::_vgAry($_POST, $key, $default);
-    }
-
-    /** 数値取得（G+P） */
-    public static function paramInt(string $key, int $def = 0): int
-    {
-        return self::_vgInt(array_merge($_GET, $_POST), $key, $def);
-    }
-
-    /** GET数値取得 */
-    public static function getInt(string $key, int $def = 0): int
-    {
-        return self::_vgInt($_GET, $key, $def);
-    }
-
-    /** POST数値取得 */
-    public static function postInt(string $key, int $def = 0): int
-    {
-        return self::_vgInt($_POST, $key, $def);
-    }
-
-    /** Float取得（G+P） */
-    public static function paramFloat(string $key, float $def = 0.0): float
-    {
-        return self::_vgFloat(array_merge($_GET, $_POST), $key, $def);
-    }
-
-    /** GET Float取得 */
-    public static function getFloat(string $key, float $def = 0.0): float
-    {
-        return self::_vgFloat($_GET, $key, $def);
-    }
-
-    /** POST Float取得 */
-    public static function postFloat(string $key, float $def = 0.0): float
-    {
-        return self::_vgFloat($_POST, $key, $def);
-    }
-
-    /** 真偽値取得（G+P） */
-    public static function paramBool(string $key, bool $def = false): bool
-    {
-        return self::_vgBool(array_merge($_GET, $_POST), $key, $def);
-    }
-
-    /** GET 真偽値取得 */
-    public static function getBool(string $key, bool $def = false): bool
-    {
-        return self::_vgBool($_GET, $key, $def);
-    }
-
-    /** POST 真偽値取得 */
-    public static function postBool(string $key, bool $def = false): bool
-    {
-        return self::_vgBool($_POST, $key, $def);
-    }
 
     /** SERVER変数取得 */
     public static function server(string $key, mixed $default = ''): mixed

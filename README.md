@@ -77,7 +77,7 @@ class IndexController extends Controller {
 
     #[Csrf]
     public function _post_save() {
-        $name = Request::post('name');
+        $name = Request::input('name');
         // ...
         return Response::redirect('index');
     }
@@ -172,7 +172,7 @@ URLのパーツ（ケバブケース、スネークケース等）は、以下�
 require __DIR__ . '/vendor/fzr/fw/inc/aliases.php';
 
 // \Request でアクセス可能
-Request::get('id');
+Request::input('id');
 Auth::check();
 Db::table('users')->where('active', 1)->all();
 ```
@@ -307,7 +307,7 @@ $users = Db::table('users')
 // ページネーション
 $result = Db::table('posts')
     ->where('published', 1)
-    ->page(Request::getInt('page', 1), 20);
+    ->page(Request::inputInt('page', 1), 20);
 
 echo $result->links();
 

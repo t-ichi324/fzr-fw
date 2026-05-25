@@ -118,7 +118,7 @@ GET  /login/login→ controller=login, action=login  → LoginController::login(
 ## Coding Standards & Aliases
 
 Fzr uses **Class Aliases** to reduce context overhead. All core classes are available in the global namespace.
-- **Rules**: Always use short names like `Request::get()` instead of `\Fzr\Request::get()`.
+- **Rules**: Always use short names like `Request::input()` instead of `\Fzr\Request::input()`.
 - **Reference**: Aliases are defined in `inc/aliases.php` and auto-loaded.
 
 **Type Hinting for AI**:
@@ -135,7 +135,7 @@ Fzr uses **Class Aliases** to reduce context overhead. All core classes are avai
 | `AuthController` | (Removed) Use `#[Auth]` or `#[Roles]` attributes instead. |
 | `Auth` | `check()`, `login()`, `logout()`, `user()`, `userObject()`, `getId()`/`id()`, `getEmail()`/`mail()`, `getUsername()`/`username()`, `getRoles()`/`roles()`, `hasRole()`, `is()`, `isAdmin()`, `isGuest()`, `token()` |
 | `Message` | `success/error/warning/info($msg)`, `get()` → `['type','message']` |
-| `Request` | `get/post/param/input($key, $default)`, `getInt/postInt/paramInt`, `getBool/postBool`, `isPost()`, `isAjax()` |
+| `Request` | `input($key, $default)`, `inputInt/inputBool/inputFloat/inputArray`, `get/post/param (deprecated)`, `isPost()`, `isAjax()` |
 | `Response` | `view($tpl)`, `redirect($url)`, `json($data)`, `error($code)` |
 | `Render` | `setTitle($t)`, `setData($k,$v)`, `getData($k)` |
 | `Form` | Form validation + HTML generation — see section below |
@@ -340,7 +340,7 @@ $posts = Post::where('published', 1)
              ->all();                            // array<Post> ← 生配列（Result ではない）
 
 // Pagination
-$result = Post::where('published', 1)->page(Request::getInt('page', 1), 20);
+$result = Post::where('published', 1)->page(Request::inputInt('page', 1), 20);
 echo $result->links();                           // HTML pagination links (Paginated オブジェクト)
 
 // Create / Update / Delete
@@ -390,16 +390,15 @@ Db::transaction(function($pdo) {
 
 ## Request — メソッド使い分け
 
-| 取得元 | 文字列 | 数値 | 真偽値 |
-|--------|--------|------|--------|
-| GET のみ | `Request::get($k)` | `Request::getInt($k)` | `Request::getBool($k)` |
-| POST のみ | `Request::post($k)` | `Request::postInt($k)` | `Request::postBool($k)` |
-| GET + POST | `Request::param($k)` | `Request::paramInt($k)` | — |
-| JSON / GET / POST | `Request::input($k)` | — | — |
+| 推奨メソッド | 取得元 | 備考 |
+|---|---|---|
+| `Request::input($k)` | 全て (GET/POST/JSON) | 通常のパラメータ取得（文字列・汎用型） |
+| `Request::inputInt($k)` | 全て (GET/POST/JSON) | 数値として取得 |
+| `Request::inputBool($k)` | 全て (GET/POST/JSON) | 真偽値として取得 |
+| `Request::inputArray($k)` | 全て (GET/POST/JSON) | 配列として取得 |
 
-- **通常フォーム**: `Request::post()` / `Request::postInt()`
-- **API (JSON body)**: `Request::input()` — `Content-Type: application/json` のとき `php://input` から読む
-- **検索クエリなど GET パラメータ**: `Request::get()` / `Request::getInt()`
+- **基本方針**: リクエストパラメータは原則として `Request::input()` 系のメソッドを使用してください。
+- **古いAPI**: `Request::get()`, `Request::post()`, `Request::param()` およびその型付き派生メソッド（`getInt` 等）は非推奨（deprecated）となりました。もしメソッドソースを限定したい場合は、`$_GET` や `$_POST` を直接参照するか、あるいは `Request::input()` を使用してください。
 
 ---
 
@@ -656,7 +655,7 @@ class ItemController extends Controller
     #[Csrf]
     public function _post_create() {
         $form = Form::from(new Item(), ignore: ['id', 'user_id', 'created_at']);
-        $form->fill(Request::post());
+        $form->fill(Request::input());
         if (!$form->validate()) {
             $form->flashError();
             return Response::redirect('item/create');
@@ -687,7 +686,7 @@ class ItemController extends Controller
         $item = Item::find($id);
         if (!$item || $item->user_id !== Auth::getId()) return Response::error(404);
         $form = Form::from($item, ignore: ['id', 'user_id', 'created_at']);
-        $form->fill(Request::post());
+        $form->fill(Request::input());
         if (!$form->validate()) {
             $form->flashError();
             return Response::redirect("item/edit/{$id}");
