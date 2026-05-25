@@ -7,6 +7,8 @@
     - 全てのリクエストパラメータ（GET/POST/JSON）を安全にマージして取得する `Request::input()` 系の型付きメソッド（`inputInt`, `inputFloat`, `inputBool`, `inputArray`）を新設。
     - 組み合わせ爆発を起こしていた `param*`, `get*`, `post*` などの古いパラメータ取得メソッド群（計15メソッド）を完全に削除。
     - 各種ドキュメント（`AI.md`, `README.md`）のコード例や説明を `input` 主軸の記述に更新。
+- **composer.json: 不要な repositories 設定の削除**:
+    - `fzr/fw` ライブラリの `composer.json` から `repositories` セクションを削除し、Packagistに登録された共通リポジトリ（または呼び出し側）経由で依存パッケージが解決される構成に変更。
 
 ### Added
 - **Core: データアクセス層の Collection 統一**:

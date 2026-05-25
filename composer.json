@@ -7,16 +7,6 @@
         "fzr/kit": "dev-main",
         "fzr/kit-extra": "dev-main"
     },
-    "repositories": [
-        {
-            "type": "vcs",
-            "url": "https://github.com/t-ichi324/fzr-kit.git"
-        },
-        {
-            "type": "vcs",
-            "url": "https://github.com/t-ichi324/fzr-kit-extra.git"
-        }
-    ],
     "autoload": {
         "psr-4": {
             "Fzr\\": "src/"
