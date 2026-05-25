@@ -2,13 +2,6 @@
 
 軽量・高速・Pure PHP。PHP 8.1+ / Composer / Cloud Native (GCP) 対応。
 外部ライブラリへの依存関係ゼロで、小規模・中規模Webアプリ開発に最適なフレームワークです。
-
----
-
-## 🚀 導入ガイド
-
-Fzrのセットアップ方法（Composer, Phar, Gitクローン）については、**[docs/install.md](./docs/install.md)** を参照してください。
-
 ---
 
 ### index.php（エントリーポイント）
