@@ -54,11 +54,7 @@
     - `Form::addError()` 内の冗長な `null` チェック（デッドコード）を削除。
 
 ### Added
-- **Jwt: JWT ユーティリティをコアに移植** (`src/Jwt.php`, `namespace Fzr`):
-  - `fzr/kit` の `Fzr\Auth\Jwt` を `fzr/fw` コアへ吸収し、`Fzr\Jwt` として独立ファイル化。
-  - 配置理由: (1) CSRF・IP制限を担う `Security.php` との責務分離、(2) セッションベースの `Auth.php` とステートレス JWT の分離、(3) `Fzr\Jwt` という短い名前空間でコアクラスと同列に並ぶ一貫性、(4) 他クラスへの依存ゼロでバンドル環境でも安全。
-  - kit 側の `php-libs/src/Auth/Jwt.php` を削除し二重定義を解消。
-  - API: `Jwt::encode()` / `Jwt::decode()` / `Jwt::verify()` / `Jwt::fromBearer()` — 変更なし。
+- **Jwt: JWT ユーティリティの整理**: 独自実装の `src/Jwt.php` を廃止。セキュリティと信頼性の観点から、`firebase/php-jwt` 等の標準ライブラリをプロジェクト側で直接利用する方針へ転換。
 
 ### Fixed
 - **Db\Query: マルチDB対応の強化**:

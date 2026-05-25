@@ -95,11 +95,6 @@ class Scaffolder
                 }
             }
 
-            // 特定のプリセットに無関係なデプロイスクリプトを除外
-            $preset = $d['preset'] ?? 'standard';
-            if ($preset === 'standard' && str_contains($relPath, 'deploy-gcp')) {
-                continue;
-            }
 
             $targetPath = $dst . DIRECTORY_SEPARATOR . $relPath;
 
