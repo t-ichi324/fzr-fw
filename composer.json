@@ -5,6 +5,11 @@
     "require": {
         "php": ">=8.1"
     },
+    "repositories": [
+        {"type": "vcs", "url": "https://github.com/t-ichi324/fzr-fw.git"},
+        {"type": "vcs", "url": "https://github.com/t-ichi324/fzr-kit.git"}
+    ],
+
     "autoload": {
         "psr-4": {
             "Fzr\\": "src/"
