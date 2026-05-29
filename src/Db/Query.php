@@ -51,6 +51,8 @@ class Query
     }
     /**
      * テーブル指定
+     *
+     * @return self<T>
      */
     public function table(string $table): self
     {
@@ -72,14 +74,22 @@ class Query
         return $this;
     }
 
-    /** SELECT 列指定 */
+    /**
+     * SELECT 列指定
+     *
+     * @return self<T>
+     */
     public function select(string ...$columns): self
     {
         $this->select = $columns;
         return $this;
     }
 
-    /** DISTINCT */
+    /**
+     * DISTINCT
+     *
+     * @return self<T>
+     */
     public function distinct(): self
     {
         $this->distinct = true;
@@ -100,6 +110,7 @@ class Query
      * - `where(function($q){...})`     → グループ条件 `(cond1 AND cond2)`
      *
      * @param  string|array|\Closure $field
+     * @return self<T>
      */
     public function where(string|array|\Closure $field, mixed $op = null, mixed $value = null): self
     {
@@ -148,7 +159,11 @@ class Query
         return $this;
     }
 
-    /** OR WHERE */
+    /**
+     * OR WHERE
+     *
+     * @return self<T>
+     */
     public function orWhere(string|array|\Closure $field, mixed $op = null, mixed $value = null): self
     {
         $prevCount = count($this->where);
@@ -161,7 +176,11 @@ class Query
         return $this;
     }
 
-    /** WHERE IN */
+    /**
+     * WHERE IN
+     *
+     * @return self<T>
+     */
     public function whereIn(string $field, array $values): self
     {
         if (empty($values)) {
@@ -178,7 +197,11 @@ class Query
         return $this;
     }
 
-    /** WHERE NOT IN */
+    /**
+     * WHERE NOT IN
+     *
+     * @return self<T>
+     */
     public function whereNotIn(string $field, array $values): self
     {
         if (empty($values)) return $this;
@@ -192,7 +215,11 @@ class Query
         return $this;
     }
 
-    /** WHERE BETWEEN */
+    /**
+     * WHERE BETWEEN
+     *
+     * @return self<T>
+     */
     public function whereBetween(string $field, mixed $min, mixed $max): self
     {
         $k1 = ':wb' . count($this->params);
@@ -203,7 +230,11 @@ class Query
         return $this;
     }
 
-    /** WHERE LIKE */
+    /**
+     * WHERE LIKE
+     *
+     * @return self<T>
+     */
     public function whereLike(string $field, string $pattern): self
     {
         $k = ':wl' . count($this->params);
@@ -212,7 +243,11 @@ class Query
         return $this;
     }
 
-    /** WHERE RAW */
+    /**
+     * WHERE RAW
+     *
+     * @return self<T>
+     */
     public function whereRaw(string $sql, array $bindings = []): self
     {
         if (empty($bindings)) {
@@ -277,20 +312,32 @@ class Query
         return $this;
     }
 
-    /** JOIN */
+    /**
+     * JOIN
+     *
+     * @return self<T>
+     */
     public function join(string $table, string $on, string $type = 'INNER'): self
     {
         $this->joins[] = "{$type} JOIN {$table} ON {$on}";
         return $this;
     }
 
-    /** LEFT JOIN */
+    /**
+     * LEFT JOIN
+     *
+     * @return self<T>
+     */
     public function leftJoin(string $table, string $on): self
     {
         return $this->join($table, $on, 'LEFT');
     }
 
-    /** RIGHT JOIN */
+    /**
+     * RIGHT JOIN
+     *
+     * @return self<T>
+     */
     public function rightJoin(string $table, string $on): self
     {
         // SQLite は 3.39.0 未満では RIGHT JOIN 非対応
@@ -300,7 +347,11 @@ class Query
         return $this->join($table, $on, 'RIGHT');
     }
 
-    /** ORDER BY */
+    /**
+     * ORDER BY
+     *
+     * @return self<T>
+     */
     public function orderBy(string $column, string $direction = 'ASC'): self
     {
         $direction    = strtoupper($direction) === 'DESC' ? 'DESC' : 'ASC';
@@ -308,28 +359,44 @@ class Query
         return $this;
     }
 
-    /** GROUP BY */
+    /**
+     * GROUP BY
+     *
+     * @return self<T>
+     */
     public function groupBy(string $column): self
     {
         $this->groupBy = $column;
         return $this;
     }
 
-    /** HAVING */
+    /**
+     * HAVING
+     *
+     * @return self<T>
+     */
     public function having(string $sql): self
     {
         $this->having = $sql;
         return $this;
     }
 
-    /** LIMIT */
+    /**
+     * LIMIT
+     *
+     * @return self<T>
+     */
     public function limit(int $limit): self
     {
         $this->limit = $limit;
         return $this;
     }
 
-    /** OFFSET */
+    /**
+     * OFFSET
+     *
+     * @return self<T>
+     */
     public function offset(int $offset): self
     {
         $this->offset = $offset;
@@ -478,7 +545,7 @@ class Query
      * @param  mixed $default NULL 時の代替値
      * @return array<int, mixed>
      */
-    public function getValues(string $column, mixed $defaultVal = null): array
+    public function getValues(string $column, mixed $default = null): array
     {
         $q = clone $this;
         $q->select = ["{$column} AS _col_v"];
@@ -487,7 +554,7 @@ class Query
         $stmt->execute($q->params);
         Logger::db($this->connection->getKey(), 3, $sql, $q->params);
         $rows = $stmt->fetchAll(\PDO::FETCH_ASSOC);
-        return array_map(fn($r) => $r['_col_v'] ?? $defaultVal, $rows);
+        return array_map(fn($r) => $r['_col_v'] ?? $default, $rows);
     }
 
     /**
