@@ -239,6 +239,9 @@ class Response
         self::sendHeaders();
 
         $vfile = $baseTemplate ? Path::view($baseTemplate) : '';
+        if ($vfile !== '' && !file_exists($vfile) && !str_ends_with($vfile, '.php')) {
+            $vfile .= '.php';
+        }
         if ($vfile !== '' && file_exists($vfile)) {
             include $vfile;
         } else {
@@ -255,6 +258,9 @@ class Response
         self::sendHeaders();
 
         $vfile = $baseTemplate ? Path::view($baseTemplate) : '';
+        if ($vfile !== '' && !file_exists($vfile) && !str_ends_with($vfile, '.php')) {
+            $vfile .= '.php';
+        }
         if ($vfile !== '' && file_exists($vfile)) {
             include $vfile;
         } else {
