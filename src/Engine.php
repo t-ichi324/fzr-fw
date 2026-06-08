@@ -441,7 +441,10 @@ class Engine
                 return;
             }
             $vfile = (defined('VIEW_TEMPLATE_BASE') && VIEW_TEMPLATE_BASE) ? Path::view(VIEW_TEMPLATE_BASE) : '';
-            if (file_exists($vfile)) include $vfile;
+            if ($vfile !== '' && !file_exists($vfile) && !str_ends_with($vfile, '.php')) {
+                $vfile .= '.php';
+            }
+            if ($vfile !== '' && file_exists($vfile)) include $vfile;
             else echo Render::getContent();
         }
     }
