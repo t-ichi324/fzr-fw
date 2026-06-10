@@ -241,13 +241,13 @@ class Engine
         $found = false;
         $routeAction = '';
         $rawAction = '';
-        $ctrlNs = Env::get('ctrl.namespace', 'App\\Controllers');
-        $nsPfx = $ctrlNs !== '' ? $ctrlNs . '\\' : '';
         $traceCandidates = [];
+        $class = '';
+        $path = '';
+        $params = [];
         if ($max === 0) {
-            $baseName = Config::CTRL_PFX . 'Index' . Config::CTRL_SFX;
-            $class = $nsPfx . $baseName;
-            $path = Path::ctrl($baseName . Config::CTRL_EXT);
+            $class = Config::CTRL_PFX . 'Index' . Config::CTRL_SFX;
+            $path = Path::ctrl($class . Config::CTRL_EXT);
             $routeAction = 'index';
             $params = [];
             $found = file_exists($path);
@@ -257,9 +257,8 @@ class Engine
                 $ctrlParts = array_slice($pathParts, 0, $i);
                 $dir = implode(DIRECTORY_SEPARATOR, array_slice($ctrlParts, 0, -1));
                 $ctrlName = $this->toClassCase($ctrlParts[$i - 1]);
-                $baseName = Config::CTRL_PFX . $ctrlName . Config::CTRL_SFX;
-                $class = $nsPfx . $baseName;
-                $path = Path::ctrl($dir, $baseName . Config::CTRL_EXT);
+                $class = Config::CTRL_PFX . $ctrlName . Config::CTRL_SFX;
+                $path = Path::ctrl($dir, $class . Config::CTRL_EXT);
                 $hit = file_exists($path);
                 if (Tracer::isEnabled()) $traceCandidates[] = ['class' => $class, 'file' => $path, 'hit' => $hit];
                 if ($hit) {
@@ -272,9 +271,8 @@ class Engine
                 }
             }
             if (!$found) {
-                $baseName = Config::CTRL_PFX . 'Index' . Config::CTRL_SFX;
-                $class = $nsPfx . $baseName;
-                $path = Path::ctrl($baseName . Config::CTRL_EXT);
+                $class = Config::CTRL_PFX . 'Index' . Config::CTRL_SFX;
+                $path = Path::ctrl($class . Config::CTRL_EXT);
                 $hit = file_exists($path);
                 if (Tracer::isEnabled()) $traceCandidates[] = ['class' => $class, 'file' => $path, 'hit' => $hit, 'fallback' => true];
                 if ($hit) {
@@ -293,14 +291,7 @@ class Engine
                 return;
             }
             $method = strtolower(Request::method());
-            $isAjax = Request::isAjax();
-            $tryList = [];
-            if ($isAjax) {
-                $tryList[] = "_ajax_{$method}_{$routeAction}";
-                $tryList[] = "_ajax_{$routeAction}";
-            }
-            $tryList[] = "_{$method}_{$routeAction}";
-            $tryList[] = $routeAction;
+            $tryList = ["_{$method}_{$routeAction}", $routeAction];
             if ($rawAction !== '' && $rawAction !== $routeAction) {
                 $tryList[] = "_{$method}_{$rawAction}";
                 $tryList[] = $rawAction;

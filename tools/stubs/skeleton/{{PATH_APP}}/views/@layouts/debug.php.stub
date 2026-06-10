@@ -9,10 +9,13 @@ $events = Tracer::getAll();
 $totalTime = round(Context::elapsed() * 1000, 2);
 $totalMem  = round(memory_get_peak_usage() / 1024 / 1024, 2);
 
-$byCategory = ['error' => [], 'timeline' => [], 'db' => [], 'log' => [], 'cache' => []];
+$byCategory = ['error' => [], 'timeline' => [], 'db' => [], 'log' => [], 'cache' => [], 'routing' => []];
 foreach ($events as $e) {
     if ($e['category'] === 'log' && in_array($e['data']['level'] ?? '', ['error', 'exception', 'db-error'])) {
         $byCategory['error'][] = $e;
+    }
+    if ($e['category'] === 'framework' && isset($e['data']['candidates'])) {
+        $byCategory['routing'][] = $e;
     }
     if (isset($byCategory[$e['category']])) $byCategory[$e['category']][] = $e;
     else $byCategory['timeline'][] = $e;
@@ -175,6 +178,7 @@ $toggleLabel = $isError ? "ERROR: {$status} ({$totalTime}ms)" : "DEBUG: {$totalT
         <div class="fzr-tracer-tab" data-tab="db">Query (<?= count($byCategory['db']) ?>)</div>
         <div class="fzr-tracer-tab" data-tab="log">Logs (<?= count($byCategory['log']) ?>)</div>
         <div class="fzr-tracer-tab" data-tab="cache">Cache (<?= count($byCategory['cache']) ?>)</div>
+        <div class="fzr-tracer-tab" data-tab="routing">Routing</div>
         <div class="fzr-tracer-tab" data-tab="request">Request</div>
         <div class="fzr-tracer-tab" data-tab="system">System</div>
     </div>
@@ -250,6 +254,44 @@ $toggleLabel = $isError ? "ERROR: {$status} ({$totalTime}ms)" : "DEBUG: {$totalT
                 <?php endforeach; ?>
                 </tbody>
             </table>
+        </div>
+        <div class="fzr-tracer-content" id="fzr-tab-routing">
+            <?php
+                $routingEvent = null;
+                foreach (array_reverse($byCategory['routing']) as $re) {
+                    $routingEvent = $re;
+                    break;
+                }
+                $candidates = $routingEvent['data']['candidates'] ?? [];
+                $matched = str_contains($routingEvent['message'] ?? '', 'matched');
+            ?>
+            <?php if (empty($candidates)): ?>
+                <p>No routing trace available. Explicit route match or no auto-routing attempted.</p>
+            <?php else: ?>
+                <p style="margin:0 0 8px; font-size:12px;">
+                    <?php if ($matched): ?>
+                        <span style="color:#28a745; font-weight:bold;">✓ Matched:</span> <?= h($routingEvent['message']) ?>
+                    <?php else: ?>
+                        <span style="color:#d73a49; font-weight:bold;">✗ Not Found</span>
+                    <?php endif; ?>
+                </p>
+                <table class="fzr-table">
+                    <thead><tr><th>#</th><th>Class</th><th>File</th><th>Result</th></tr></thead>
+                    <tbody>
+                    <?php foreach ($candidates as $i => $c): ?>
+                        <?php $isHit = !empty($c['hit']); ?>
+                        <tr style="<?= $isHit ? 'background:#f0fff4;' : '' ?>">
+                            <td style="width:30px;"><?= $i + 1 ?></td>
+                            <td><?= h($c['class']) ?><?= !empty($c['fallback']) ? ' <span style="color:#888; font-size:10px;">(fallback)</span>' : '' ?></td>
+                            <td style="color:#666; font-size:11px;"><?= h($c['file']) ?></td>
+                            <td style="width:60px; font-weight:bold; color:<?= $isHit ? '#28a745' : '#d73a49' ?>">
+                                <?= $isHit ? '✓ HIT' : '✗ miss' ?>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                    </tbody>
+                </table>
+            <?php endif; ?>
         </div>
         <div class="fzr-tracer-content" id="fzr-tab-request">
             <table class="fzr-table">
