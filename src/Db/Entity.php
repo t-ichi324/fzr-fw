@@ -2,7 +2,7 @@
 
 namespace Fzr\Db;
 
-use Fzr\Collection;
+use Fzr\HttpException;
 
 /**
  * Active Record Entity — maps database tables to typed PHP objects.
@@ -64,6 +64,19 @@ abstract class Entity extends \Fzr\Model
     public static function all(): \Fzr\Collection
     {
         return static::query()->all();
+    }
+
+    /**
+     * ID 指定で一件取得（見つからなければ 404 例外）
+     *
+     * @return static
+     * @throws \Fzr\HttpException
+     */
+    public static function findOrFail(int|string $id): static
+    {
+        $entity = static::find($id);
+        if ($entity === null) throw HttpException::notFound();
+        return $entity;
     }
 
     /**

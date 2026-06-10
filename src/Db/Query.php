@@ -573,6 +573,33 @@ class Query
     }
 
     /**
+     * 条件付きでクエリを変形する（値が truthy のときだけ callback を適用）
+     *
+     * @param  mixed    $value    評価する値
+     * @param  callable $callback function(self $q, mixed $value): void
+     * @return self<T>
+     */
+    public function when(mixed $value, callable $callback): self
+    {
+        if ($value !== null && $value !== '' && $value !== false) {
+            $callback($this, $value);
+        }
+        return $this;
+    }
+
+    /**
+     * チェーンを切らずにコールバックを挿入する（デバッグ・ログ用）
+     *
+     * @param  callable $callback function(self $q): void
+     * @return self<T>
+     */
+    public function tap(callable $callback): self
+    {
+        $callback($this);
+        return $this;
+    }
+
+    /**
      * デバッグ用: SQL 文とパラメータを配列で返す
      *
      * @return array{0: string, 1: array<string, mixed>}
