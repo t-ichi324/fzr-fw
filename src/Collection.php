@@ -40,11 +40,17 @@ class Collection implements \ArrayAccess, \IteratorAggregate, \Countable
 
     /**
      * 要素追加
+     *
      * @param T $item
+     * @param TKey|null $key 指定した場合はそのキーで追加、省略時は末尾追加
      */
-    public function add($item)
+    public function add($item, mixed $key = null): void
     {
-        $this->items[] = $item;
+        if ($key !== null) {
+            $this->items[$key] = $item;
+        } else {
+            $this->items[] = $item;
+        }
     }
 
     /**

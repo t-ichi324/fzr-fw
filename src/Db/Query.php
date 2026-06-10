@@ -86,6 +86,20 @@ class Query
     }
 
     /**
+     * 結果を stdClass のコレクションで返す（fetchClass を無視）
+     *
+     * GROUP BY + 集計カラムなど、Entity にマップできない結果に使う。
+     *
+     * @return self<\stdClass>
+     */
+    public function asRaw(): self
+    {
+        $this->fetchClass = null;
+        /** @var self<\stdClass> $this */
+        return $this;
+    }
+
+    /**
      * DISTINCT
      *
      * @return self<T>
@@ -430,12 +444,13 @@ class Query
     /**
      * 全行取得
      *
-     * @return \Fzr\Collection<int, T|\stdClass>
+     * @param  string|null $keyBy 指定したカラムをコレクションのキーにする
+     * @return \Fzr\Collection<int|string, T|\stdClass>
      */
-    public function all(): \Fzr\Collection
+    public function all(?string $keyBy = null): \Fzr\Collection
     {
-        $sql = $this->buildSelect();
-        return $this->executeSelect($sql);
+        $result = $this->executeSelect($this->buildSelect());
+        return $keyBy !== null ? $result->keyBy($keyBy) : $result;
     }
 
     /**
