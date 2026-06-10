@@ -240,20 +240,29 @@ class Engine
         $max = count($pathParts);
         $found = false;
         $routeAction = '';
+        $rawAction = '';
+        $ctrlNs = Env::get('ctrl.namespace', 'App\\Controllers');
+        $nsPfx = $ctrlNs !== '' ? $ctrlNs . '\\' : '';
+        $traceCandidates = [];
         if ($max === 0) {
-            $class = Config::CTRL_PFX . 'Index' . Config::CTRL_SFX;
-            $path = Path::ctrl($class . Config::CTRL_EXT);
+            $baseName = Config::CTRL_PFX . 'Index' . Config::CTRL_SFX;
+            $class = $nsPfx . $baseName;
+            $path = Path::ctrl($baseName . Config::CTRL_EXT);
             $routeAction = 'index';
             $params = [];
             $found = file_exists($path);
+            if (Tracer::isEnabled()) $traceCandidates[] = ['class' => $class, 'file' => $path, 'hit' => $found];
         } else {
             for ($i = $max; $i > 0; $i--) {
                 $ctrlParts = array_slice($pathParts, 0, $i);
                 $dir = implode(DIRECTORY_SEPARATOR, array_slice($ctrlParts, 0, -1));
                 $ctrlName = $this->toClassCase($ctrlParts[$i - 1]);
-                $class = Config::CTRL_PFX . $ctrlName . Config::CTRL_SFX;
-                $path = Path::ctrl($dir, $class . Config::CTRL_EXT);
-                if (file_exists($path)) {
+                $baseName = Config::CTRL_PFX . $ctrlName . Config::CTRL_SFX;
+                $class = $nsPfx . $baseName;
+                $path = Path::ctrl($dir, $baseName . Config::CTRL_EXT);
+                $hit = file_exists($path);
+                if (Tracer::isEnabled()) $traceCandidates[] = ['class' => $class, 'file' => $path, 'hit' => $hit];
+                if ($hit) {
                     $found = true;
                     $methodAndParams = array_slice($pathParts, $i);
                     $rawAction = $methodAndParams[0] ?? 'index';
@@ -263,9 +272,12 @@ class Engine
                 }
             }
             if (!$found) {
-                $class = Config::CTRL_PFX . 'Index' . Config::CTRL_SFX;
-                $path = Path::ctrl($class . Config::CTRL_EXT);
-                if (file_exists($path)) {
+                $baseName = Config::CTRL_PFX . 'Index' . Config::CTRL_SFX;
+                $class = $nsPfx . $baseName;
+                $path = Path::ctrl($baseName . Config::CTRL_EXT);
+                $hit = file_exists($path);
+                if (Tracer::isEnabled()) $traceCandidates[] = ['class' => $class, 'file' => $path, 'hit' => $hit, 'fallback' => true];
+                if ($hit) {
                     $found = true;
                     $rawAction = $pathParts[0];
                     $routeAction = $this->toMethodCase($rawAction);
@@ -274,7 +286,7 @@ class Engine
             }
         }
         if ($found) {
-            if (Tracer::isEnabled()) Tracer::add('framework', "Route matched (auto): $class@$routeAction");
+            if (Tracer::isEnabled()) Tracer::add('framework', "Route matched (auto): $class@$routeAction", null, ['candidates' => $traceCandidates]);
             include_once $path;
             if (!class_exists($class) || !(($controller = new $class()) instanceof Controller)) {
                 $this->error(404);
@@ -289,7 +301,7 @@ class Engine
             }
             $tryList[] = "_{$method}_{$routeAction}";
             $tryList[] = $routeAction;
-            if (isset($rawAction) && $rawAction !== $routeAction) {
+            if ($rawAction !== '' && $rawAction !== $routeAction) {
                 $tryList[] = "_{$method}_{$rawAction}";
                 $tryList[] = $rawAction;
             }
@@ -333,6 +345,7 @@ class Engine
             $this->error(404);
             return;
         }
+        if (Tracer::isEnabled()) Tracer::add('framework', 'Route not found (auto)', null, ['candidates' => $traceCandidates]);
         $this->error(404);
     }
 

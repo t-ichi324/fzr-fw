@@ -14,12 +14,36 @@ namespace Fzr;
  *
  * Contrast with {@see Bag} (dynamic array-based) and {@see Store} (static/singleton-like).
  */
+#[\AllowDynamicProperties]
 abstract class Model implements \JsonSerializable
 {
+    /** @var array 動的に割り当てられた追加プロパティ */
+    protected array $_dynamicProperties = [];
+
     public function __construct(mixed $data = null)
     {
         if ($data !== null) $this->merge($data);
         $this->__after_construct();
+    }
+
+    public function __get(string $name): mixed
+    {
+        return $this->_dynamicProperties[$name] ?? null;
+    }
+
+    public function __set(string $name, mixed $value): void
+    {
+        $this->_dynamicProperties[$name] = $value;
+    }
+
+    public function __isset(string $name): bool
+    {
+        return isset($this->_dynamicProperties[$name]);
+    }
+
+    public function __unset(string $name): void
+    {
+        unset($this->_dynamicProperties[$name]);
     }
 
     protected function __after_construct() {}
@@ -50,7 +74,10 @@ abstract class Model implements \JsonSerializable
 
     public function get(string $key, mixed $default = null): mixed
     {
-        return $this->$key ?? $default;
+        if (property_exists($this, $key)) {
+            return $this->$key;
+        }
+        return $this->_dynamicProperties[$key] ?? $default;
     }
 
     public function toArray(): array
@@ -62,7 +89,7 @@ abstract class Model implements \JsonSerializable
             if ($prop->isStatic()) continue;
             $res[$name] = $this->$name;
         }
-        return $res;
+        return array_merge($res, $this->_dynamicProperties);
     }
 
     public function keyList(): array
@@ -72,12 +99,16 @@ abstract class Model implements \JsonSerializable
 
     public function has(string $key): bool
     {
-        return property_exists($this, $key);
+        return property_exists($this, $key) || array_key_exists($key, $this->_dynamicProperties);
     }
 
     public function set(string $key, mixed $value): static
     {
-        if (property_exists($this, $key)) $this->$key = $value;
+        if (property_exists($this, $key)) {
+            $this->$key = $value;
+        } else {
+            $this->_dynamicProperties[$key] = $value;
+        }
         return $this;
     }
 
