@@ -24,6 +24,7 @@ class Engine
     private static array $onBeforeAction = [];
     private static $onError = null;
     private static array $routes = [];
+    private static array $prefixes = [];
     private static ?self $instance = null;
 
     /** ReflectionClass / ReflectionMethod キャッシュ（FPMワーカー内で使い回す） */
@@ -237,6 +238,22 @@ class Engine
             return;
         }
         $pathParts = Request::routeParts();
+        $ctrlBaseDir = '';
+
+        // prefix マッチ：URLプレフィックスに一致したらコントローラ基底ディレクトリを差し替え
+        if (!empty(self::$prefixes)) {
+            $requestPath = '/' . implode('/', $pathParts);
+            foreach (self::$prefixes as $pfx) {
+                $urlPfx = $pfx['url'];
+                if ($requestPath === $urlPfx || str_starts_with($requestPath, $urlPfx . '/')) {
+                    $ctrlBaseDir = $pfx['dir'];
+                    $stripped = ltrim(substr($requestPath, strlen($urlPfx)), '/');
+                    $pathParts = $stripped !== '' ? explode('/', $stripped) : [];
+                    break;
+                }
+            }
+        }
+
         $max = count($pathParts);
         $found = false;
         $routeAction = '';
@@ -247,7 +264,7 @@ class Engine
         $params = [];
         if ($max === 0) {
             $class = Config::CTRL_PFX . 'Index' . Config::CTRL_SFX;
-            $path = Path::ctrl($class . Config::CTRL_EXT);
+            $path = Path::ctrl($ctrlBaseDir, $class . Config::CTRL_EXT);
             $routeAction = 'index';
             $params = [];
             $found = file_exists($path);
@@ -255,7 +272,7 @@ class Engine
         } else {
             for ($i = $max; $i > 0; $i--) {
                 $ctrlParts = array_slice($pathParts, 0, $i);
-                $dir = implode(DIRECTORY_SEPARATOR, array_slice($ctrlParts, 0, -1));
+                $dir = implode(DIRECTORY_SEPARATOR, array_filter([$ctrlBaseDir, implode(DIRECTORY_SEPARATOR, array_slice($ctrlParts, 0, -1))]));
                 $ctrlName = $this->toClassCase($ctrlParts[$i - 1]);
                 $class = Config::CTRL_PFX . $ctrlName . Config::CTRL_SFX;
                 $path = Path::ctrl($dir, $class . Config::CTRL_EXT);
@@ -272,7 +289,7 @@ class Engine
             }
             if (!$found) {
                 $class = Config::CTRL_PFX . 'Index' . Config::CTRL_SFX;
-                $path = Path::ctrl($class . Config::CTRL_EXT);
+                $path = Path::ctrl($ctrlBaseDir, $class . Config::CTRL_EXT);
                 $hit = file_exists($path);
                 if (Tracer::isEnabled()) $traceCandidates[] = ['class' => $class, 'file' => $path, 'hit' => $hit, 'fallback' => true];
                 if ($hit) {
@@ -614,6 +631,23 @@ class Engine
         // 3. クラス全体を最後にチェック
         $attrs = $refClass->getAttributes($className, \ReflectionAttribute::IS_INSTANCEOF);
         return !empty($attrs) ? $attrs[0]->newInstance() : null;
+    }
+
+    /**
+     * URLプレフィックスとコントローラフォルダを紐づける
+     *
+     * 例: Engine::prefix('/admin', 'admin/')
+     * → /admin/user/edit は controllers/admin/ 以下を自動ルーティング
+     *
+     * @param string $urlPrefix  URLのプレフィックス（例: '/admin'）
+     * @param string $ctrlDir    コントローラのサブディレクトリ（例: 'admin/'）
+     */
+    public static function prefix(string $urlPrefix, string $ctrlDir): void
+    {
+        self::$prefixes[] = [
+            'url' => '/' . trim($urlPrefix, '/'),
+            'dir' => trim($ctrlDir, '/\\'),
+        ];
     }
 
     /** ルート明示登録 */

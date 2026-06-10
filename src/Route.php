@@ -44,4 +44,9 @@ class Route
             Engine::addRoute(strtoupper($method), $pattern, $handler);
         }
     }
+
+    public static function prefix(string $urlPrefix, string $ctrlDir): void
+    {
+        Engine::prefix($urlPrefix, $ctrlDir);
+    }
 }
