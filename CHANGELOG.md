@@ -3,6 +3,9 @@
 ## [Unreleased]
 
 ### Added
+- **Engine: エラーハンドリングDXの改善**:
+    - `app.debug = true` 時のデフォルト例外画面において、例外発生箇所のソースコードを前後5行を含めてインライン表示する「コードプレビュー機能」を新設。
+    - 例外によって処理が途中で中断された場合でも、その時点までに蓄積されたTracer情報（SQLクエリ履歴やログ）をエラー画面の最下部に自動で統合して描画する機能を追加。
 - **Query: `run()` / `buildCountSql()` 実行ヘルパを新設**: prepare→execute→ログ→Tracer 記録を全実行系で共通化。`Db::select/page/execute` にも実行時間と Tracer 記録が付くように。
 - **Render: 簡易パンくず API を追加**: `addBreadcrumb($label, $url?)` / `breadcrumbs()` / `clearBreadcrumbs()`。データ保持のみで HTML はアプリ側で組む方針（旧 Breadcrumb クラスの置き換え）。
 - **Db\ModelGenerator を新設**: Entity コード生成を `Db` ファサードから分離（`Db::generateModels()` は deprecated 委譲として残置）。

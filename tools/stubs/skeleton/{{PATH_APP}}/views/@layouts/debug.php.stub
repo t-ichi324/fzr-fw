@@ -262,15 +262,15 @@ $toggleLabel = $isError ? "ERROR: {$status} ({$totalTime}ms)" : "DEBUG: {$totalT
                     $routingEvent = $re;
                     break;
                 }
-                $candidates = $routingEvent['data']['candidates'] ?? [];
-                $matched = str_contains($routingEvent['message'] ?? '', 'matched');
+                $candidates = $routingEvent ? ($routingEvent['data']['candidates'] ?? []) : [];
+                $matched = $routingEvent ? str_contains($routingEvent['message'] ?? '', 'matched') : false;
             ?>
             <?php if (empty($candidates)): ?>
                 <p>No routing trace available. Explicit route match or no auto-routing attempted.</p>
             <?php else: ?>
                 <p style="margin:0 0 8px; font-size:12px;">
                     <?php if ($matched): ?>
-                        <span style="color:#28a745; font-weight:bold;">✓ Matched:</span> <?= h($routingEvent['message']) ?>
+                        <span style="color:#28a745; font-weight:bold;">✓ Matched:</span> <?= h($routingEvent['message'] ?? '') ?>
                     <?php else: ?>
                         <span style="color:#d73a49; font-weight:bold;">✗ Not Found</span>
                     <?php endif; ?>
@@ -346,7 +346,8 @@ $toggleLabel = $isError ? "ERROR: {$status} ({$totalTime}ms)" : "DEBUG: {$totalT
         localStorage.setItem('fzr_tracer_open', open);
     };
 
-    const isOpen = localStorage.getItem('fzr_tracer_open') === 'true';
+    const hasError = <?= json_encode($hasError) ?>;
+    const isOpen = localStorage.getItem('fzr_tracer_open') === 'true' || hasError;
     if(isOpen) setState(true);
 
     // タブ切り替え
@@ -363,7 +364,6 @@ $toggleLabel = $isError ? "ERROR: {$status} ({$totalTime}ms)" : "DEBUG: {$totalT
     };
 
     // 初期タブ復元
-    const hasError = <?= json_encode($hasError) ?>;
     const savedTab = localStorage.getItem('fzr_tracer_tab') || 'timeline';
     switchTab(hasError ? 'error' : savedTab);
 

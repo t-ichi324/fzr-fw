@@ -430,16 +430,27 @@ class Engine
             if ($err_view !== null) {
                 Render::setContent(Render::getTemplate($err_view));
             } else {
-                $content = "<style>body{font-family:sans-serif;background:#fff1f2;color:#9f1239;display:flex;align-items:center;justify-content:center;height:100vh;margin:0}.c{text-align:left;padding:3rem 2rem;background:#fff;border-radius:1rem;border:2px solid #fecdd3;width:90%;max-width:600px;box-shadow:0 10px 15px -3px rgba(0,0,0,0.1)}h1{font-size:2rem;margin:0;border-bottom:2px solid #fecdd3;padding-bottom:10px}p{font-size:1.1rem;color:#be123c;margin:1.5rem 0;line-height:1.6;word-break:break-all}.dbg{margin-top:1.5rem;padding:1rem;background:#fff8f8;border:1px solid #fecdd3;border-radius:.5rem;font-size:.8rem;color:#555;font-family:monospace;white-space:pre-wrap;word-break:break-all;max-height:60vh;overflow:auto}</style>";
-                $content .= "<div class='c'><h1>{$defaultTitle}</h1>";
-                if ($error) $content .= "<p>" . h($error) . "</p>";
+                $content = "<style>body{font-family:sans-serif;background:#fff1f2;color:#9f1239;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;margin:0;padding:2rem 0;box-sizing:border-box}.c{text-align:left;padding:3rem 2rem;background:#fff;border-radius:1rem;border:2px solid #fecdd3;width:90%;max-width:1000px;box-shadow:0 10px 15px -3px rgba(0,0,0,0.1);box-sizing:border-box}h1{font-size:2rem;margin:0;border-bottom:2px solid #fecdd3;padding-bottom:10px}p{font-size:1.1rem;color:#be123c;margin:1.5rem 0;line-height:1.6;word-break:break-all}.dbg{margin-top:1.5rem;padding:1rem;background:#fff8f8;border:1px solid #fecdd3;border-radius:.5rem;font-size:.8rem;color:#555;font-family:monospace;white-space:pre-wrap;word-break:break-all;max-height:40vh;overflow:auto}</style>";
+                $content .= "<div class='c'><h1>" . htmlspecialchars($defaultTitle, ENT_QUOTES, 'UTF-8') . "</h1>";
+                if ($error) {
+                    $content .= "<p>" . htmlspecialchars((string)$error, ENT_QUOTES, 'UTF-8') . "</p>";
+                }
                 if (Context::isDebug() && $debugEx !== null) {
-                    $traceText  = h(get_class($debugEx)) . ': ' . h($debugEx->getMessage()) . "\n";
-                    $traceText .= h($debugEx->getFile()) . ':' . $debugEx->getLine() . "\n\n";
-                    $traceText .= h($debugEx->getTraceAsString());
+                    $content .= $this->getCodePreview($debugEx->getFile(), $debugEx->getLine());
+
+                    $traceText  = htmlspecialchars(get_class($debugEx), ENT_QUOTES, 'UTF-8') . ': ' . htmlspecialchars($debugEx->getMessage(), ENT_QUOTES, 'UTF-8') . "\n";
+                    $traceText .= htmlspecialchars($debugEx->getFile(), ENT_QUOTES, 'UTF-8') . ':' . $debugEx->getLine() . "\n\n";
+                    $traceText .= htmlspecialchars($debugEx->getTraceAsString(), ENT_QUOTES, 'UTF-8');
                     $content .= "<div class='dbg'>" . $traceText . "</div>";
                 }
                 $content .= "</div>";
+
+                if (Context::isDebug() && !Context::isApi()) {
+                    if (Render::hasTemplate('@layouts/debug')) {
+                        $content .= Render::getTemplate('@layouts/debug');
+                    }
+                }
+
                 Render::setContent($content);
                 echo $content;
                 return;
@@ -452,6 +463,42 @@ class Engine
             if ($vfile !== '' && file_exists($vfile)) include $vfile;
             else echo Render::getContent();
         }
+    }
+
+    /**
+     * 例外発生箇所のコードプレビューを生成
+     */
+    private function getCodePreview(string $file, int $line, int $radius = 5): string
+    {
+        if (!file_exists($file) || !is_readable($file)) {
+            return '';
+        }
+        $lines = file($file);
+        $count = count($lines);
+        $start = max(0, $line - $radius - 1);
+        $end = min($count, $line + $radius);
+
+        $html = "<div class='code-preview' style='background:#1e1e1e;color:#d4d4d4;font-family:monospace;padding:1.5rem;border-radius:.5rem;margin:1.5rem 0;overflow:auto;font-size:.85rem;line-height:1.5;box-shadow:inset 0 2px 4px rgba(0,0,0,0.6);'>";
+        $html .= "<div style='color:#858585;border-bottom:1px solid #3c3c3c;padding-bottom:8px;margin-bottom:12px;font-weight:bold;word-break:break-all;'>File: " . htmlspecialchars($file, ENT_QUOTES, 'UTF-8') . " (Line " . $line . ")</div>";
+        for ($i = $start; $i < $end; $i++) {
+            $ln = $i + 1;
+            $isErrorLine = ($ln === $line);
+            $rawCode = $lines[$i];
+            $code = htmlspecialchars(rtrim($rawCode, "\r\n"), ENT_QUOTES, 'UTF-8');
+            
+            $bg = $isErrorLine ? 'background:#4a151b;border-left:4px solid #e51400;margin-left:-4px;padding-left:4px;font-weight:bold;color:#fff;' : 'padding-left:8px;';
+            $html .= sprintf(
+                "<div style='display:flex;white-space:pre;%s'>" .
+                "<span style='color:#858585;width:3rem;text-align:right;margin-right:1rem;user-select:none;'>%d</span>" .
+                "<code style='flex:1;font-family:inherit;'>%s</code>" .
+                "</div>",
+                $bg,
+                $ln,
+                $code
+            );
+        }
+        $html .= "</div>";
+        return $html;
     }
 
     protected function invokeInner(Controller $controller, string $routeAction, string $dispatchMethod, array $params = [])
