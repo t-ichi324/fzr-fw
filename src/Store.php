@@ -26,16 +26,6 @@ abstract class Store
         return self::$_allData[$class];
     }
 
-    public static function from(mixed $source): void
-    {
-        static::replace($source);
-    }
-
-    public static function fill(mixed $data): void
-    {
-        static::merge($data);
-    }
-
     public static function merge(mixed $data): void
     {
         $current = &static::data();
@@ -53,11 +43,6 @@ abstract class Store
     {
         $ref = &static::data();
         $ref = $data;
-    }
-
-    public static function bind(mixed $source): void
-    {
-        static::merge($source);
     }
 
     public static function clear(): void

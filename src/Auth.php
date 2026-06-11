@@ -88,7 +88,9 @@ class Auth extends Store
         $key = self::sessionKey();
         $auth = Session::get($key);
         if (is_array($auth) && isset($auth['user'])) {
-            self::fill($auth['user']);
+            // login() と同じく replace で保持する（fill だと配列にマージされ、
+            // セッション復元後だけ user() の型が stdClass に変わってしまう）
+            self::replace($auth['user']);
             self::$roles = null; // getRolesで再取得させる
             return true;
         }
@@ -142,28 +144,16 @@ class Auth extends Store
      * 現在ログインしているユーザーのIDを取得します。
      * @return int ユーザーID
      */
-    public static function getId(): int
+    public static function id(): int
     {
         if (!self::check()) return 0;
         return self::getInt(Env::get("auth.user_id_name", "id"), 0);
-    }
-    public static function id(): int
-    {
-        return self::getId();
-    }
-    public static function userid(): int
-    {
-        return self::getId();
     }
 
     public static function getUsername(): string
     {
         if (!self::check()) return "";
         return self::getString(Env::get("auth.user_name_name", "name"), "");
-    }
-    public static function username(): string
-    {
-        return self::getUsername();
     }
 
     /**
@@ -174,10 +164,6 @@ class Auth extends Store
     {
         if (!self::check()) return null;
         return self::getString(Env::get("auth.user_email_name", "email"), null);
-    }
-    public static function mail(): string|null
-    {
-        return self::getEmail();
     }
 
     public static function getRoles(): array
@@ -209,15 +195,11 @@ class Auth extends Store
         self::$roles = array_values($roles);
         return self::$roles;
     }
-    public static function roles(): array
-    {
-        return self::getRoles();
-    }
 
     /** ロール保持確認 */
     public static function hasRole(string|array $roles): bool
     {
-        $userRoles = self::roles();
+        $userRoles = self::getRoles();
         if (empty($userRoles)) return false;
         $required = is_array($roles) ? $roles : [$roles];
         foreach ($required as $r) {
@@ -226,16 +208,10 @@ class Auth extends Store
         return false;
     }
 
-    /** hasRole() の短いエイリアス */
-    public static function is(string|array $role): bool
-    {
-        return self::hasRole($role);
-    }
-
     /** 管理者権限の簡易確認 */
     public static function isAdmin(): bool
     {
-        return self::is(Env::get('auth.admin_role', 'admin'));
+        return self::hasRole(Env::get('auth.admin_role', 'admin'));
     }
 
     /** ユーザーに紐づくトークンを取得 */
@@ -248,6 +224,6 @@ class Auth extends Store
     /** Remember Me 用の Cookie 名を取得する */
     private static function rememberTokenName(): string
     {
-        return defined('REMEMBER_TOKEN') ? REMEMBER_TOKEN : 'rem';
+        return Env::get('session.remember_token', 'rem');
     }
 }

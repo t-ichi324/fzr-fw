@@ -29,14 +29,11 @@ if (!class_exists('Path'))      class_alias(\Fzr\Path::class, 'Path');
 if (!class_exists('Url'))       class_alias(\Fzr\Url::class, 'Url');
 if (!class_exists('Cache'))     class_alias(\Fzr\Cache::class, 'Cache');
 if (!class_exists('Message'))   class_alias(\Fzr\Message::class, 'Message');
-if (!class_exists('Breadcrumb')) class_alias(\Fzr\Breadcrumb::class, 'Breadcrumb');
 
 // Data
 if (!class_exists('Model'))     class_alias(\Fzr\Model::class, 'Model');
 if (!class_exists('Bag'))       class_alias(\Fzr\Bag::class, 'Bag');
 if (!class_exists('Store'))     class_alias(\Fzr\Store::class, 'Store');
-if (!class_exists('BagModel'))  class_alias(\Fzr\Bag::class, 'BagModel');
-if (!class_exists('StoreModel')) class_alias(\Fzr\Store::class, 'StoreModel');
 if (!class_exists('Collection')) class_alias(\Fzr\Collection::class, 'Collection');
 if (!class_exists('Form'))      class_alias(\Fzr\Form::class, 'Form');
 if (!class_exists('Storage'))   class_alias(\Fzr\Storage::class, 'Storage');
@@ -50,4 +47,3 @@ if (!class_exists('Db'))        class_alias(\Fzr\Db\Db::class, 'Db');
 if (!class_exists('DbConnection')) class_alias(\Fzr\Db\Connection::class, 'DbConnection');
 if (!class_exists('DbQuery'))   class_alias(\Fzr\Db\Query::class, 'DbQuery');
 if (!class_exists('Entity'))    class_alias(\Fzr\Db\Entity::class, 'Entity');
-if (!class_exists('LiteDb'))    class_alias(\Fzr\Db\LiteDb::class, 'LiteDb');

@@ -97,7 +97,12 @@ class Collection implements \ArrayAccess, \IteratorAggregate, \Countable
      */
     public function map(callable $callback): self
     {
-        return new Collection(array_map($callback, $this->items, array_keys($this->items)));
+        // array_map に複数配列を渡すとキーが連番に振り直されるため foreach で保持する
+        $results = [];
+        foreach ($this->items as $key => $item) {
+            $results[$key] = $callback($item, $key);
+        }
+        return new Collection($results);
     }
 
     /**

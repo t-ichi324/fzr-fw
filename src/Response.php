@@ -52,6 +52,12 @@ class Response
         return self::$headers[$name] ?? null;
     }
 
+    /** ヘッダ削除（設定済みのデフォルトヘッダを取り消す） */
+    public static function removeHeader(string $name): void
+    {
+        unset(self::$headers[$name]);
+    }
+
     /** 全ヘッダ出力 */
     public static function sendHeaders(): void
     {
@@ -66,13 +72,19 @@ class Response
     // =============================
     // コントローラ用ファクトリ
     // =============================
+    /** デフォルトのベーステンプレート名を取得 */
+    protected static function defaultBaseTemplate(): string
+    {
+        return Env::get('view.base_template', '@layouts/base.php') ?? '';
+    }
+
     /** テンプレート応答生成 */
     public static function view(string $template, array $data = [], ?string $baseTemplate = null): array
     {
         if (!empty($data)) Render::set($data);
         return ['type' => 'view', 'value' => [
             'template' => $template,
-            'baseTemplate' => $baseTemplate ?? (defined('VIEW_TEMPLATE_BASE') ? VIEW_TEMPLATE_BASE : ''),
+            'baseTemplate' => $baseTemplate ?? self::defaultBaseTemplate(),
             'is_partial' => false
         ]];
     }
@@ -83,7 +95,7 @@ class Response
         if (!empty($data)) Render::set($data);
         return ['type' => 'view-raw', 'value' => [
             'content' => $content,
-            'baseTemplate' => $baseTemplate ?? (defined('VIEW_TEMPLATE_BASE') ? VIEW_TEMPLATE_BASE : ''),
+            'baseTemplate' => $baseTemplate ?? self::defaultBaseTemplate(),
             'is_partial' => false
         ]];
     }
@@ -134,7 +146,7 @@ class Response
     /** 200 OK 応答生成 */
     public static function ok(string $content = ''): array
     {
-        return ['type' => 'raw', 'value' => ['content' => $content, 'mimeType' => 'text/plain']];
+        return self::raw($content);
     }
 
     /** 204 No Content 応答生成 */
@@ -234,26 +246,19 @@ class Response
     {
         self::callHook(self::$before);
         Render::setPartial($is_partial);
-        $content = Render::getTemplate($template);
-        Render::setContent($content);
-        self::sendHeaders();
-
-        $vfile = $baseTemplate ? Path::view($baseTemplate) : '';
-        if ($vfile !== '' && !file_exists($vfile) && !str_ends_with($vfile, '.php')) {
-            $vfile .= '.php';
-        }
-        if ($vfile !== '' && file_exists($vfile)) {
-            include $vfile;
-        } else {
-            echo Render::getContent();
-        }
-        self::callHook(self::$after);
+        self::finishView(Render::getTemplate($template), $baseTemplate);
     }
 
     protected static function emitViewRaw(string $content, ?string $baseTemplate = null, $is_partial = false): void
     {
         self::callHook(self::$before);
         Render::setPartial($is_partial);
+        self::finishView($content, $baseTemplate);
+    }
+
+    /** ベーステンプレートへの埋め込みと出力（emitView / emitViewRaw 共通処理） */
+    private static function finishView(string $content, ?string $baseTemplate): void
+    {
         Render::setContent($content);
         self::sendHeaders();
 

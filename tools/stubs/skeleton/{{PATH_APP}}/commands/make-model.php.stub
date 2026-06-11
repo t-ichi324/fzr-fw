@@ -9,7 +9,7 @@
  */
 
 use Fzr\Command;
-use Fzr\Db\Db;
+use Fzr\Db\ModelGenerator;
 
 class MakeModelCommand extends Command
 {
@@ -18,7 +18,7 @@ class MakeModelCommand extends Command
         $force   = $this->hasFlag('-f');
         $targets = array_values(array_filter($this->argv, fn($a) => $a !== '-f'));
 
-        $result = Db::generateModels(ABSPATH . '/{{PATH_APP}}/models', $force, $targets);
+        $result = ModelGenerator::generate(ABSPATH . '/{{PATH_APP}}/models', $force, $targets);
 
         foreach ($result['generated'] as $item) {
             $this->success("  [GEN]  {$item['table']} -> {$item['class']}");

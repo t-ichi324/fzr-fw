@@ -6,6 +6,10 @@ use Fzr\Logger;
 /**
  * Vector Database Support — experimental support for vector similarity search using pgvector.
  *
+ * ※ contrib（オプトイン）扱い。コアのオートロード対象外のため、使う場合は
+ *    `require 'vendor/fzr/fw/contrib/Vector.php';` するか
+ *    `Loader::add('vendor/fzr/fw/contrib')` で読み込むこと。
+ *
  * Use to perform nearest-neighbor searches on embeddings (e.g., for AI/RAG applications).
  * Typical uses: semantic search, recommendation engines, clustering, RAG context retrieval.
  *
@@ -162,7 +166,9 @@ class Vector {
             $sql .= " WHERE " . implode(' AND ', $whereParts);
         }
 
-        $sql .= " ORDER BY {$distanceExpr} LIMIT :limit";
+        // エミュレーション無効の PDO は同名プレースホルダの再利用不可のため、
+        // SELECT 句で付けた別名 distance で並べ替える
+        $sql .= " ORDER BY distance LIMIT :limit";
         $params[':limit'] = $limit;
 
         $stmt = $this->connection->getPdo()->prepare($sql);

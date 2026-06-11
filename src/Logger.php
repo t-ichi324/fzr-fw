@@ -81,9 +81,11 @@ class Logger
     protected static function write(string $type, ?string $message, mixed $data = null): void
     {
         $rid = Context::requestId();
+        // 認証フローを駆動しない（Auth::id() はセッション開始や remember 復元の
+        // DB クエリまで走るため、check 済みデータがあるときだけ覗く）
         $uid = '-';
-        if (class_exists(__NAMESPACE__ . '\\Auth', false)) {
-            $uid = Auth::id() ?: '-';
+        if (class_exists(__NAMESPACE__ . '\\Auth', false) && Auth::hasData()) {
+            $uid = Auth::getInt(Env::get('auth.user_id_name', 'id')) ?: '-';
         }
         $time = date('Y-m-d H:i:s');
 

@@ -53,11 +53,6 @@ abstract class Model implements \JsonSerializable
         return new static($source);
     }
 
-    public function fill(mixed $data): static
-    {
-        return $this->merge($data);
-    }
-
     public function merge(mixed $data): static
     {
         $data = DataHelper::extract($data);
@@ -65,11 +60,6 @@ abstract class Model implements \JsonSerializable
             if (property_exists($this, $key)) $this->$key = $value;
         }
         return $this;
-    }
-
-    public function bind(mixed $source): static
-    {
-        return $this->merge($source);
     }
 
     public function get(string $key, mixed $default = null): mixed

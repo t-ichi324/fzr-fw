@@ -42,7 +42,7 @@ Engine::dispatch();
 ```php
 <?php
 use Fzr\Db\Db;
-use Fzr\Db\LiteDb;
+use Fzr\Db\Connection;
 use Fzr\Env;
 use Fzr\Logger;
 
@@ -52,8 +52,7 @@ if (getenv('K_SERVICE')) { // Cloud Run環境判定
 }
 
 // DB設定（SQLite）
-$db = LiteDb::create('app');
-Db::addConnection('default', $db);
+Db::addConnection('default', new Connection('default', ['driver' => 'sqlite', 'sqlitePath' => Path::db('app.db')]));
 Db::migrate();
 ```
 
@@ -151,14 +150,12 @@ URLのパーツ（ケバブケース、スネークケース等）は、以下�
 | `Fzr\Collection` | コレクション |
 | `Fzr\Storage` | ストレージ（ローカル / GCS） |
 | `Fzr\Message` | フラッシュメッセージ |
-| `Fzr\Breadcrumb` | パンくずリスト |
 | `Fzr\Path` | 物理パス |
 | `Fzr\Url` | URL生成 |
 | `Fzr\Db\Db` | DBファサード |
 | `Fzr\Db\Query` | クエリビルダ |
 | `Fzr\Db\Entity` | ActiveRecord |
-| `Fzr\Db\LiteDb` | SQLiteラッパー |
-| `Fzr\Db\Vector` | pgvector ベクトル検索 (RAG) |
+| `Fzr\Db\Vector` | pgvector ベクトル検索 (RAG)・contrib のためオプトイン読み込み |
 
 ## エイリアス有効モード
 
@@ -331,6 +328,8 @@ PostgreSQL + pgvector を利用して、Embedding ベースの類似検索（RAG
 // bootstrap.php
 use Fzr\Db\Db;
 use Fzr\Db\Connection;
+// contrib のため明示読み込みが必要
+require 'vendor/fzr/fw/contrib/Vector.php';
 use Fzr\Db\Vector;
 
 // PostgreSQL接続
@@ -440,7 +439,6 @@ $vec->createHnswIndex('documents');
 
 ```php
 h($str)           // HTMLエスケープ
-e($str)           // HTMLエスケープ（エイリアス）
 url('path')       // URL生成
 env('key', 'def') // 設定値取得
 csrf_field()      // CSRFフィールドHTML

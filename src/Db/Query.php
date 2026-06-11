@@ -22,6 +22,9 @@ use Fzr\Db\Paginated;
  */
 class Query
 {
+    /** where() の省略引数とユーザー値 null を区別するためのセンチネル */
+    public const OMITTED = "\0fzr.omitted";
+
     protected Connection $connection;
     protected ?string $table = null;
     /** @var class-string<T>|null */
@@ -37,6 +40,7 @@ class Query
     protected ?string $having = null;
     protected array $joins = [];
     protected bool $distinct = false;
+    protected array $eagerLoads = [];
 
     /**
      * @param Connection $connection
@@ -100,6 +104,23 @@ class Query
     }
 
     /**
+     * 結果を任意クラスにマップして返す（Entity 以外のDTO用）
+     *
+     * stdClass の代わりに指定クラスを FETCH_CLASS でキャストする。
+     * コンストラクタは呼ばれない（FETCH_PROPS_LATE）。
+     *
+     * @template T2 of object
+     * @param  class-string<T2> $class
+     * @return self<T2>
+     */
+    public function asClass(string $class): self
+    {
+        $this->fetchClass = $class;
+        /** @var self<T2> $this */
+        return $this;
+    }
+    
+    /**
      * DISTINCT
      *
      * @return self<T>
@@ -119,6 +140,8 @@ class Query
      * 使用例:
      * - `where('col', $val)`           → `col = val`
      * - `where('col', '!=', $val)`     → `col != val`
+     * - `where('col', null)`           → `col IS NULL`
+     * - `where('col', '!=', null)`     → `col IS NOT NULL`
      * - `where('col', [1,2,3])`        → `col IN (1,2,3)` (配列を自動検出)
      * - `where(['col1' => $v1, ...])`  → `col1 = v1 AND ...`
      * - `where(function($q){...})`     → グループ条件 `(cond1 AND cond2)`
@@ -126,7 +149,7 @@ class Query
      * @param  string|array|\Closure $field
      * @return self<T>
      */
-    public function where(string|array|\Closure $field, mixed $op = null, mixed $value = null): self
+    public function where(string|array|\Closure $field, mixed $op = self::OMITTED, mixed $value = self::OMITTED): self
     {
         if ($field instanceof \Closure) {
             $sub = new self($this->connection, $this->table);
@@ -145,13 +168,16 @@ class Query
             return $this;
         }
 
-        // where('col', $val) の 2引数形式を正規化
-        if ($value === null && $op !== null) {
-            $value = $op;
+        // 引数形式の正規化（センチネルで「省略」と「null 値」を区別）
+        if ($value === self::OMITTED) {
+            // where('col', $val) / where('col')
+            $value = ($op === self::OMITTED) ? null : $op;
             $op    = '=';
+        } elseif ($op === self::OMITTED) {
+            $op = '=';
         }
 
-        $op = strtoupper(trim($op ?? '='));
+        $op = strtoupper(trim((string)$op));
 
         // 配列 → IN / NOT IN へ自動変換
         if (is_array($value)) {
@@ -178,7 +204,7 @@ class Query
      *
      * @return self<T>
      */
-    public function orWhere(string|array|\Closure $field, mixed $op = null, mixed $value = null): self
+    public function orWhere(string|array|\Closure $field, mixed $op = self::OMITTED, mixed $value = self::OMITTED): self
     {
         $prevCount = count($this->where);
         $this->where($field, $op, $value);
@@ -362,14 +388,103 @@ class Query
     }
 
     /**
+     * リレーション一括ロード: N:1（belongsTo 相当 / Eager Loading で N+1 回避）
+     *
+     * JOIN は使わず、メインクエリ実行後に関連テーブルを WHERE IN の
+     * 1 クエリでまとめて取得し、各行へ紐づける。
+     * `all()` / `first()` / `page()` のいずれでも適用される。
+     * 取得側は `$entity->rel(Shisetsu::class)?->name` または
+     * `$entity->{紐づけ名}`（紐づけ名は省略時、相手のテーブル名）。
+     *
+     * 使用例:
+     * - `Kengaku::query()->rel(Shisetsu::class)->all()`
+     *     （kengaku.shisetsu_id → shisetsu.id をキー名から自動推測）
+     * - `->rel(Shisetsu::class, 'id', 'shisetsu_id')`（キーを明示する場合）
+     * - クロージャだけ渡すときは名前付き引数が読みやすい:
+     *     `->rel(Shisetsu::class, query: fn($q) => $q->where('is_deleted', 0))`
+     * - 同一クラス複数紐づけは as で名前を分ける:
+     *     `->rel(KengakuDay::class, localKey: 'moved_day_id', as: 'movedDay')`
+     *
+     * @template TRel of Entity
+     * @param  class-string<TRel> $class      関連エンティティクラス
+     * @param  string|null        $foreignKey 関連テーブル側のキー列（省略時: 相手の PK）
+     * @param  string|null        $localKey   メインテーブル側のキー列（省略時: 相手テーブル名_id）
+     * @param  \Closure|null      $query      関連クエリの変形 function(Query $q): void
+     * @param  string|null        $as         紐づけ名（省略時: 相手テーブル名）
+     * @return self<T>
+     */
+    public function rel(string $class, ?string $foreignKey = null, ?string $localKey = null, ?\Closure $query = null, ?string $as = null): self
+    {
+        if (!is_subclass_of($class, Entity::class)) {
+            throw new \InvalidArgumentException("rel(): {$class} は " . Entity::class . " のサブクラスではありません");
+        }
+        $this->eagerLoads[] = [
+            'name'       => $as ?? $class::tableName(),
+            'class'      => $class,
+            'localKey'   => $localKey ?? $class::tableName() . '_id',
+            'foreignKey' => $foreignKey ?? $class::primaryKeyName(),
+            'many'       => false,
+            'query'      => $query,
+        ];
+        return $this;
+    }
+
+    /**
+     * リレーション一括ロード: 1:N（hasMany 相当）
+     *
+     * 各行に関連レコードの Collection を紐づける。
+     * 取得側は `$entity->relMany(KengakuDay::class)` または `$entity->{紐づけ名}`。
+     *
+     * 使用例:
+     * - `Kengaku::query()->relMany(KengakuDay::class)->all()`
+     *     （kengaku.id ← kengaku_day.kengaku_id をテーブル名から自動推測）
+     * - `->relMany(KengakuDay::class, query: fn($q) => $q->orderBy('event_date'))`
+     *
+     * @template TRel of Entity
+     * @param  class-string<TRel> $class      関連エンティティクラス
+     * @param  string|null        $foreignKey 関連テーブル側のキー列（省略時: 自テーブル名_id）
+     * @param  string|null        $localKey   メインテーブル側のキー列（省略時: 自分の PK）
+     * @param  \Closure|null      $query      関連クエリの変形 function(Query $q): void
+     * @param  string|null        $as         紐づけ名（省略時: 相手テーブル名）
+     * @return self<T>
+     */
+    public function relMany(string $class, ?string $foreignKey = null, ?string $localKey = null, ?\Closure $query = null, ?string $as = null): self
+    {
+        if (!is_subclass_of($class, Entity::class)) {
+            throw new \InvalidArgumentException("relMany(): {$class} は " . Entity::class . " のサブクラスではありません");
+        }
+        if ($foreignKey === null && $this->table === null) {
+            throw new \InvalidArgumentException('relMany(): テーブル未指定のため foreignKey を推測できません。foreignKey を明示してください');
+        }
+        $ownPk = ($this->fetchClass !== null && is_subclass_of($this->fetchClass, Entity::class))
+            ? $this->fetchClass::primaryKeyName()
+            : 'id';
+        $this->eagerLoads[] = [
+            'name'       => $as ?? $class::tableName(),
+            'class'      => $class,
+            'localKey'   => $localKey ?? $ownPk,
+            'foreignKey' => $foreignKey ?? $this->table . '_id',
+            'many'       => true,
+            'query'      => $query,
+        ];
+        return $this;
+    }
+
+    /**
      * ORDER BY
      *
      * @return self<T>
      */
     public function orderBy(string $column, string $direction = 'ASC'): self
     {
-        $direction    = strtoupper($direction) === 'DESC' ? 'DESC' : 'ASC';
-        $this->orderBy = ($this->orderBy ? $this->orderBy . ', ' : '') . $this->quoteIdentifier($column) . " {$direction}";
+        // 'name DESC' のように方向まで書かれた生指定はそのまま使う（二重に方向を付けない）
+        if (preg_match('/\s+(ASC|DESC)\s*$/i', $column)) {
+            $expr = $column;
+        } else {
+            $direction = strtoupper($direction) === 'DESC' ? 'DESC' : 'ASC';
+            $expr = $this->quoteIdentifier($column) . " {$direction}";
+        }
+        $this->orderBy = ($this->orderBy ? $this->orderBy . ', ' : '') . $expr;
         return $this;
     }
 
@@ -428,9 +543,7 @@ class Query
         $this->limit  = $perPage;
         $this->offset = ($page - 1) * $perPage;
 
-        $countSql = 'SELECT COUNT(*) FROM ' . $this->quoteIdentifier($this->table) . $this->buildJoins() . $this->buildWhere();
-        $stmt = $this->connection->getPdo()->prepare($countSql);
-        $stmt->execute($this->params);
+        $stmt  = $this->run($this->buildCountSql(), $this->params, 3);
         $total = (int)$stmt->fetchColumn();
 
         $rows = $this->all();
@@ -454,15 +567,15 @@ class Query
     }
 
     /**
-     * 1行取得
+     * 1行取得（clone で実行するため LIMIT 等の副作用なし）
      *
      * @return T|\stdClass|null
      */
     public function first(?object $default = null): ?object
     {
-        $this->limit = 1;
-        $sql  = $this->buildSelect();
-        $rows = $this->executeSelect($sql);
+        $q = clone $this;
+        $q->limit = 1;
+        $rows = $q->executeSelect($q->buildSelect());
         return $rows[0] ?? $default;
     }
 
@@ -474,27 +587,13 @@ class Query
         $q = clone $this;
         $q->select = [$column];
         $q->limit  = 1;
-        $sql  = $q->buildSelect();
-        $stmt = $this->connection->getPdo()->prepare($sql);
-        $start = microtime(true);
-        $stmt->execute($q->params);
-        $elapsed = microtime(true) - $start;
-        Logger::db($this->connection->getKey(), 3, $sql, $q->params);
-        if (Tracer::isEnabled()) Tracer::recordQuery($sql, $q->params, $elapsed, $this->connection->getKey());
-        return $stmt->fetchColumn();
+        return $this->run($q->buildSelect(), $q->params, 3)->fetchColumn();
     }
 
     /** 件数取得 */
     public function count(): int
     {
-        $sql  = 'SELECT COUNT(*) FROM ' . $this->quoteIdentifier($this->table) . $this->buildJoins() . $this->buildWhere();
-        $stmt = $this->connection->getPdo()->prepare($sql);
-        $start = microtime(true);
-        $stmt->execute($this->params);
-        $elapsed = microtime(true) - $start;
-        Logger::db($this->connection->getKey(), 3, $sql, $this->params);
-        if (\Fzr\Tracer::isEnabled()) \Fzr\Tracer::recordQuery($sql, $this->params, $elapsed, $this->connection->getKey());
-        return (int)$stmt->fetchColumn();
+        return (int)$this->run($this->buildCountSql(), $this->params, 3)->fetchColumn();
     }
 
     /** SUM */
@@ -542,11 +641,7 @@ class Query
     {
         $q = clone $this;
         $q->select = ["{$keyColumn} AS _kv_k", "{$valueColumn} AS _kv_v"];
-        $sql  = $q->buildSelect();
-        $stmt = $this->connection->getPdo()->prepare($sql);
-        $stmt->execute($q->params);
-        Logger::db($this->connection->getKey(), 3, $sql, $q->params);
-        $rows = $stmt->fetchAll(\PDO::FETCH_ASSOC);
+        $rows = $this->run($q->buildSelect(), $q->params, 3)->fetchAll(\PDO::FETCH_ASSOC);
         $result = [];
         foreach ($rows as $row) {
             $result[$row['_kv_k']] = $row['_kv_v'];
@@ -564,11 +659,7 @@ class Query
     {
         $q = clone $this;
         $q->select = ["{$column} AS _col_v"];
-        $sql  = $q->buildSelect();
-        $stmt = $this->connection->getPdo()->prepare($sql);
-        $stmt->execute($q->params);
-        Logger::db($this->connection->getKey(), 3, $sql, $q->params);
-        $rows = $stmt->fetchAll(\PDO::FETCH_ASSOC);
+        $rows = $this->run($q->buildSelect(), $q->params, 3)->fetchAll(\PDO::FETCH_ASSOC);
         return array_map(fn($r) => $r['_col_v'] ?? $default, $rows);
     }
 
@@ -644,15 +735,9 @@ class Query
             $placeholders[] = $ph;
             $params[$ph]    = $v;
         }
-        $sql  = 'INSERT INTO ' . $this->quoteIdentifier($this->table) . " ({$columns}) VALUES (" . implode(', ', $placeholders) . ')';
-        $pdo  = $this->connection->getPdo();
-        $stmt = $pdo->prepare($sql);
-        $start = microtime(true);
-        $stmt->execute($params);
-        $elapsed = microtime(true) - $start;
-        Logger::db($this->connection->getKey(), 2, $sql, $params);
-        if (Tracer::isEnabled()) Tracer::recordQuery($sql, $params, $elapsed, $this->connection->getKey());
-        return $pdo->lastInsertId();
+        $sql = 'INSERT INTO ' . $this->quoteIdentifier($this->table) . " ({$columns}) VALUES (" . implode(', ', $placeholders) . ')';
+        $this->run($sql, $params, 2);
+        return $this->connection->getPdo()->lastInsertId();
     }
 
     /**
@@ -680,14 +765,8 @@ class Query
             $allPlaceholders[] = '(' . implode(', ', $rowPh) . ')';
         }
 
-        $sql  = 'INSERT INTO ' . $this->quoteIdentifier($this->table) . ' (' . implode(', ', $quotedColumns) . ') VALUES ' . implode(', ', $allPlaceholders);
-        $stmt = $this->connection->getPdo()->prepare($sql);
-        $start = microtime(true);
-        $stmt->execute($params);
-        $elapsed = microtime(true) - $start;
-        Logger::db($this->connection->getKey(), 2, $sql, $params);
-        if (Tracer::isEnabled()) Tracer::recordQuery($sql, $params, $elapsed, $this->connection->getKey());
-        return $stmt->rowCount();
+        $sql = 'INSERT INTO ' . $this->quoteIdentifier($this->table) . ' (' . implode(', ', $quotedColumns) . ') VALUES ' . implode(', ', $allPlaceholders);
+        return $this->run($sql, $params, 2)->rowCount();
     }
 
     /**
@@ -740,13 +819,7 @@ class Query
                 . ' DO UPDATE SET ' . implode(', ', $updateSets);
         }
 
-        $stmt = $this->connection->getPdo()->prepare($sql);
-        $start = microtime(true);
-        $stmt->execute($params);
-        $elapsed = microtime(true) - $start;
-        Logger::db($this->connection->getKey(), 2, $sql, $params);
-        if (Tracer::isEnabled()) Tracer::recordQuery($sql, $params, $elapsed, $this->connection->getKey());
-        return $stmt->rowCount();
+        return $this->run($sql, $params, 2)->rowCount();
     }
 
     /**
@@ -765,13 +838,7 @@ class Query
         }
         $params = array_merge($params, $this->params);
         $sql    = 'UPDATE ' . $this->quoteIdentifier($this->table) . ' SET ' . implode(', ', $sets) . $this->buildWhere();
-        $stmt   = $this->connection->getPdo()->prepare($sql);
-        $start = microtime(true);
-        $stmt->execute($params);
-        $elapsed = microtime(true) - $start;
-        Logger::db($this->connection->getKey(), 2, $sql, $params);
-        if (Tracer::isEnabled()) Tracer::recordQuery($sql, $params, $elapsed, $this->connection->getKey());
-        return $stmt->rowCount();
+        return $this->run($sql, $params, 2)->rowCount();
     }
 
     /**
@@ -781,18 +848,16 @@ class Query
      */
     public function delete(): int
     {
-        $sql  = 'DELETE FROM ' . $this->quoteIdentifier($this->table) . $this->buildWhere();
-        $stmt = $this->connection->getPdo()->prepare($sql);
-        $start = microtime(true);
-        $stmt->execute($this->params);
-        $elapsed = microtime(true) - $start;
-        Logger::db($this->connection->getKey(), 2, $sql, $this->params);
-        if (Tracer::isEnabled()) Tracer::recordQuery($sql, $this->params, $elapsed, $this->connection->getKey());
-        return $stmt->rowCount();
+        $sql = 'DELETE FROM ' . $this->quoteIdentifier($this->table) . $this->buildWhere();
+        return $this->run($sql, $this->params, 2)->rowCount();
     }
 
     /**
      * 大量データを chunk 件ずつ分割処理
+     *
+     * 注意: OFFSET ベースのページングのため、コールバック内で処理対象の行を
+     * 更新・削除して WHERE 条件から外れると、後続チャンクで行がスキップされる。
+     * そのような用途では PK 範囲で絞り込む（keyset 方式）こと。
      *
      * @param  int      $size     1回あたりの取得件数
      * @param  callable $callback function(array<T> $rows): bool|void  false を返すと中断
@@ -817,6 +882,41 @@ class Query
     // =============================
     // ビルダー（内部）
     // =============================
+
+    /**
+     * prepare → execute → ログ → Tracer 記録を一括で行う実行ヘルパ
+     *
+     * @param int $level Logger::db のレベル（2: 更新系, 3: 参照系）
+     */
+    protected function run(string $sql, array $params, int $level): \PDOStatement
+    {
+        $stmt = $this->connection->getPdo()->prepare($sql);
+        $start = microtime(true);
+        $stmt->execute($params);
+        $elapsed = microtime(true) - $start;
+        Logger::db($this->connection->getKey(), $level, $sql, $params);
+        if (Tracer::isEnabled()) Tracer::recordQuery($sql, $params, $elapsed, $this->connection->getKey());
+        return $stmt;
+    }
+
+    /**
+     * 件数取得用 SQL を構築
+     *
+     * groupBy / having / distinct がある場合はサブクエリに包んで
+     * 「グループ数」を数える（そのまま COUNT(*) すると全行数になるため）。
+     */
+    protected function buildCountSql(): string
+    {
+        $base = 'FROM ' . $this->quoteIdentifier($this->table) . $this->buildJoins() . $this->buildWhere();
+        if ($this->groupBy !== null || $this->having !== null || $this->distinct) {
+            $dist  = $this->distinct ? 'DISTINCT ' : '';
+            $inner = "SELECT {$dist}" . implode(', ', $this->select) . ' ' . $base;
+            if ($this->groupBy) $inner .= " GROUP BY {$this->groupBy}";
+            if ($this->having)  $inner .= " HAVING {$this->having}";
+            return "SELECT COUNT(*) FROM ({$inner}) AS __cnt_q";
+        }
+        return 'SELECT COUNT(*) ' . $base;
+    }
 
     protected function buildSelect(): string
     {
@@ -862,12 +962,7 @@ class Query
      */
     protected function executeSelect(string $sql): \Fzr\Collection
     {
-        $stmt = $this->connection->getPdo()->prepare($sql);
-        $start = microtime(true);
-        $stmt->execute($this->params);
-        $elapsed = microtime(true) - $start;
-        Logger::db($this->connection->getKey(), 3, $sql, $this->params);
-        if (Tracer::isEnabled()) Tracer::recordQuery($sql, $this->params, $elapsed, $this->connection->getKey());
+        $stmt = $this->run($sql, $this->params, 3);
 
         $rows = [];
         if ($this->fetchClass !== null) {
@@ -879,7 +974,52 @@ class Query
             $rows = $stmt->fetchAll(\PDO::FETCH_OBJ);
         }
 
-        return \Fzr\Collection::make($rows);
+        $collection = \Fzr\Collection::make($rows);
+        if (!empty($this->eagerLoads) && $collection->isNotEmpty()) {
+            $this->applyEagerLoads($collection);
+        }
+        return $collection;
+    }
+
+    /**
+     * with() で登録されたリレーションを WHERE IN の一括クエリで取得し、各行へ紐づける
+     *
+     * @param \Fzr\Collection<int, T|\stdClass> $rows
+     */
+    protected function applyEagerLoads(\Fzr\Collection $rows): void
+    {
+        foreach ($this->eagerLoads as $load) {
+            $localKey = $load['localKey'];
+            $many     = $load['many'];
+
+            $keys = [];
+            foreach ($rows as $row) {
+                $v = $row->{$localKey} ?? null;
+                if ($v !== null && $v !== '') $keys[] = $v;
+            }
+            $keys = array_values(array_unique($keys));
+
+            $related = \Fzr\Collection::make();
+            if (!empty($keys)) {
+                /** @var Query<Entity> $q */
+                $q = $load['class']::query()->whereIn($load['foreignKey'], $keys);
+                if ($load['query'] !== null) ($load['query'])($q);
+                $related = $q->all();
+            }
+            $map = $many ? $related->groupBy($load['foreignKey']) : $related->keyBy($load['foreignKey']);
+
+            foreach ($rows as $row) {
+                $key   = $row->{$localKey} ?? null;
+                $value = $key !== null ? ($map[$key] ?? null) : null;
+                if ($many) $value = \Fzr\Collection::make($value ?? []);
+                if ($row instanceof Entity) {
+                    $row->setRelation($load['name'], $value);
+                } else {
+                    // stdClass（asRaw）行は動的プロパティで紐づけ
+                    $row->{$load['name']} = $value;
+                }
+            }
+        }
     }
 
     protected function quoteIdentifier(string $identifier): string

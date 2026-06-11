@@ -8,21 +8,25 @@ namespace Fzr;
  * Use to handle user input validation and form rendering in a unified way.
  * Typical uses: processing contact forms, handling user registration, data entry interfaces.
  *
- * - Acts as a factory and container for {@see FormValidator} and {@see FormRender}.
  * - Simplifies the "bind-validate-render" workflow.
  * - Supports mass-assignment from request data via `from()`.
  * - Extends {@see Bag} to hold validated or raw input data.
  */
 class Form extends Bag
 {
+    /** addError() でフィールド未指定のときに使う内部キー */
+    public const ERROR_GLOBAL = '_global';
+
     protected array $validators = [];
+    /** @var array<string, list<string>> [field => [msg, ...]]（グローバルは ERROR_GLOBAL キー） */
     protected array $errors = [];
     protected ?string $csrfToken = null;
     protected ?Model $boundModel = null;
 
     public static function fromRequest(): self
     {
-        return new self($_REQUEST);
+        // $_REQUEST（Cookie 混入あり得る）ではなく Request::allInputs() に揃える
+        return new self(Request::allInputs());
     }
 
     /** ソースからFormを生成（Modelの場合はバリデーションルールも自動構築） */
@@ -42,13 +46,8 @@ class Form extends Bag
         } elseif (is_array($source)) {
             $this->data = $source;
         } else {
-            if (Request::isJsonRequest()) {
-                $raw = @file_get_contents("php://input");
-                $json = json_decode($raw ?: '', true);
-                $this->data = is_array($json) ? $json : [];
-            } else {
-                $this->data = array_merge($_GET, $_POST);
-            }
+            // GET + POST + JSON ペイロード（Request::input() と同じソース・同じ優先順）
+            $this->data = Request::allInputs();
         }
         $this->data = $this->trimData($this->data);
         $this->csrfToken = Security::getCsrfToken();
@@ -209,8 +208,7 @@ class Form extends Bag
 
     public function csrfTag(): string
     {
-        $key = defined('CSRF_TOKEN_NAME') ? CSRF_TOKEN_NAME : 'csrf_token';
-        return '<input type="hidden" name="' . h($key) . '" value="' . h((string)$this->getCsrfToken()) . '">';
+        return '<input type="hidden" name="' . h(Security::csrfTokenName()) . '" value="' . h((string)$this->getCsrfToken()) . '">';
     }
 
     public function validate(): bool
@@ -247,43 +245,47 @@ class Form extends Bag
         }
     }
 
-    public function addError(array|string $text, ?string $key = null)
+    public function addError(array|string $text, ?string $key = null): void
     {
-        if ($text === "") {
+        if ($text === '' || $text === []) {
             return;
         }
-        if (is_array($text)) {
-            foreach ($text as $t) {
-                $this->addError($t, $key);
-            }
-        } else {
-            if ($key) {
-                $this->errors[$key][] = $text;
-            } else {
-                $this->errors[] = $text;
-            }
+        foreach ((array)$text as $t) {
+            $this->errors[$key ?? self::ERROR_GLOBAL][] = $t;
         }
     }
 
-    public function hasError(): bool
+    public function hasError(?string $key = null): bool
     {
+        if ($key !== null) {
+            return !empty($this->errors[$key]);
+        }
         return !empty($this->errors);
     }
 
+    /**
+     * エラー取得
+     *
+     * @return array $key 指定時はそのフィールドのメッセージ一覧、無指定時は [field => [msg, ...]] 全体
+     */
     public function getErrors(?string $key = null): array
     {
-        if ($key) {
+        if ($key !== null) {
             return $this->errors[$key] ?? [];
         }
-        $all = [];
-        foreach ($this->errors as $k => $v) {
-            if (is_array($v)) {
-                $all = array_merge($all, $v);
-            } else {
-                $all[] = $v;
-            }
+        return $this->errors;
+    }
+
+    /** 先頭のエラーメッセージ（$key 指定でフィールドを絞る。無ければ null） */
+    public function firstError(?string $key = null): ?string
+    {
+        if ($key !== null) {
+            return $this->errors[$key][0] ?? null;
         }
-        return $all;
+        foreach ($this->errors as $msgs) {
+            return $msgs[0] ?? null;
+        }
+        return null;
     }
 
     public function removeError(?string $key = null): void
@@ -295,27 +297,24 @@ class Form extends Bag
         }
     }
 
-    public function flashError(?string $errorMsg = null, ?string $successMsg = null): void
+    /**
+     * 全エラーを Message へ送出する（フィールド情報を維持）
+     *
+     * view 再表示・redirect どちらでも、表示側は Message::field() /
+     * Message::globals() で同じように取得できる。
+     *
+     * @param string|null $summary 概括メッセージ（エラーがあるときグローバルへ1件追加）
+     */
+    public function toMessage(?string $summary = null): void
     {
-        if ($this->hasError()) {
-            if ($errorMsg) {
-                Message::error($errorMsg);
-            } else {
-                foreach ($this->getErrors() as $err) {
-                    Message::error($err);
-                }
+        foreach ($this->errors as $field => $msgs) {
+            foreach ($msgs as $msg) {
+                Message::error($msg, $field === self::ERROR_GLOBAL ? null : $field);
             }
-        } elseif ($successMsg) {
-            Message::success($successMsg);
+        }
+        if ($summary !== null && $this->hasError()) {
+            Message::error($summary);
         }
     }
 
-    public function tag(string $key): FormRender
-    {
-        return new FormRender($key, $this);
-    }
-    public function __invoke(string $key): FormRender
-    {
-        return $this->tag($key);
-    }
 }

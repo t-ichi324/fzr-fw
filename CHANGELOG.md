@@ -2,7 +2,79 @@
 
 ## [Unreleased]
 
+### Added
+- **Query: `run()` / `buildCountSql()` 実行ヘルパを新設**: prepare→execute→ログ→Tracer 記録を全実行系で共通化。`Db::select/page/execute` にも実行時間と Tracer 記録が付くように。
+- **Render: 簡易パンくず API を追加**: `addBreadcrumb($label, $url?)` / `breadcrumbs()` / `clearBreadcrumbs()`。データ保持のみで HTML はアプリ側で組む方針（旧 Breadcrumb クラスの置き換え）。
+- **Db\ModelGenerator を新設**: Entity コード生成を `Db` ファサードから分離（`Db::generateModels()` は deprecated 委譲として残置）。
+- **Connection: `db.sql_mode` 設定を追加**: 指定時のみ `SET SESSION sql_mode` を発行。
+- **Entity: Default Scope（自動フィルタ）機能**:
+    - `defaultScope(Query $q)` をサブクラスでオーバーライドすると、`query()` 起点の全クエリ（`find`/`where`/`all`/`count`、Eager Load のリレーション先を含む）に絞り込みが自動適用される。論理削除（`is_deleted = 0`）などの定型条件の繰り返しを排除。
+    - `query(scoped: false)` でスコープを解除可能（削除済み一覧・復元処理用）。
+    - `Db::table()` による生アクセスには適用されない（明示的な抜け道）。
+- **Response: `removeHeader()` を追加**: 設定済みのデフォルトヘッダ（`X-Frame-Options` 等）をアクション単位で取り消せるように。`#[AllowIframe]` の実装で使用。
+- **helpers: HTML 属性ヘルパーを新設**: `checked($bool)`、`selected($bool)`、`disabled($bool)` — チェックボックス・ラジオボタン・セレクトボックスの属性出力を簡潔に。`options($list, $selected)` で select option タグ列を生成（値・ラベル自動エスケープ）。
+
+### Removed
+- **Breadcrumb クラスを削除**: 決め打ち HTML を出力する UI 部品はコアの責務外。データ保持は `Render::addBreadcrumb()` 系へ移行。
+- **Request: UA スニッフィング群を削除**: `isRobot()` / `isMobile()` / `getBrowser()` / `getOS()` / `getDeviceType()`。判定リストが古くメンテ対象外のため。
+- **重複エイリアスの削除**: `Auth::getId()/userid()`（→ `id()`）、`Auth::username()`（→ `getUsername()`）、`Auth::mail()`（→ `getEmail()`）、`Auth::roles()`（→ `getRoles()`）、`Auth::is()`（→ `hasRole()`）、`Url::to()`（→ `get()`）、`Model::fill()/bind()`・`Bag::fill()`・`Store::from()/fill()/bind()`（→ `merge()`/`replace()`）、helpers `e()`（→ `h()`）、aliases の `BagModel`/`StoreModel`。
+- **Engine: 未使用の `criticalError()` を削除**。
+- **Db\Vector を contrib/ へ隔離**: 実験的・RAG 特化のためコアのオートロード対象外に（`require` または `Loader::add('vendor/fzr/fw/contrib')` でオプトイン）。
+- **Db: LiteDb クラスの削除**: アプリでの使用実績がなく、大半が `Db` ファサードへの単純委譲だったため削除。エイリアス・ドキュメントの記載も整理。任意の SQLite ファイルを開く用途は `Db::addConnection()` + `new Connection(...)` で代替。
+- **レガシーファイル `old-sys-Handler.php` の削除**: 旧システム由来の死コード（存在しない `\Conf` / `\RunTrace` 等を参照）でどこからも読み込まれていなかったため削除。
+- **Engine: 廃止ヘッダ `X-XSS-Protection` の送出を停止**: モダンブラウザでは無視され、古い実装では脆弱性の原因にもなったため削除。代わりにデフォルトで `Referrer-Policy: strict-origin-when-cross-origin` を送出。
+- **FormRender クラスとメソッドの削除**: 実装から0利用のため削除。`Form::tag()` / `Form::__invoke()` / `FormRender.php`。ビュー記述は素の HTML + 極小ヘルパー（`checked()`/`selected()`/`options()`）に統一。
+
+### Fixed
+- **Cookie: `set()` の期限を TTL（今からの秒数）に統一**: `setcookie` の絶対時刻をそのまま受けていたため、`Auth::login(remember: true)` の Remember-Me Cookie が即失効していた問題を修正。
+- **Query: `where('col', '=', null)` / `where('col', '!=', null)` が IS NULL / IS NOT NULL になるように修正**: 3引数で null を渡すと演算子が値として束縛されていた（`Query::OMITTED` センチネルで省略と null 値を区別）。
+- **Query: groupBy/having/distinct 付きの `count()` / `page()` の件数が全行数になっていた問題を修正**（サブクエリで集計）。
+- **Query: `first()` がビルダの LIMIT を破壊していた問題を修正**（clone 実行に変更）。
+- **Query: `orderBy('name desc')` のような方向込み指定で `ASC` が二重付与され SQL エラーになる問題を修正**。
+- **Collection: `map()` がキーを連番に振り直していた問題を修正**（`keyBy()->map()` でキー保持）。
+- **Vector: `search()` が同名プレースホルダを再利用しており、エミュレーション無効の PDO で実行時エラーになっていた問題を修正**。
+- **Request: `inputStr()` に配列が渡ると "Array" 文字列になっていた問題を修正**（先頭要素へ縮退）。
+- **Request: Edge の UA 判定が Chrome に誤判定されていた問題を修正**（削除前の修正、その後 UA 群ごと削除）。
+- **Auth: セッション復元後に `user()` の型が stdClass に変わる問題を修正**（`check()` も `replace()` で保持）。
+- **Cache: closure が null を返した場合にメモリ層が毎回ミス扱いになっていた問題を修正**。
+- **Migration: MySQL のマルチステートメント SQL で2文目以降のエラーが握り潰される問題を修正**（rowset を全消化してエラーを表面化）。
+- **helpers: `abort()` の引数順バグを修正**: `HttpException` のコンストラクタ（`$message, $httpCode`）と逆順で渡していたため、`abort(404)` が「メッセージ=404 / コード不正」の壊れた例外になっていた。
+- **Db: `generateModels()` の出力 namespace を削除**: 生成テンプレートが `namespace App\Model;` を出力していたが、実際のアプリ規約（グローバル名前空間 + Loader）と不一致でそのままでは動作しなかった。
+- **Db: `generateModels()` のクラス名変換を改善**: 末尾 `s` を一律除去していたため `status` → `Statu` 等になっていた。`ss` 終わりと例外語（status, news, address 等）は単数形化しないように修正。
+- **Engine: `__id` ディスパッチ経路の 401 ハンドリング統一**: 通常経路にあった「401 なら LOGIN_PAGE へリダイレクト」が `__id` フォールバック経路に無く、`#[Auth]` 付き `__id` でエラー画面が出てしまっていた。
+- **Engine: `#[AllowIframe]` が仕様外の `X-Frame-Options: ALLOWALL` を送出していた問題**: ヘッダ自体を送らず CSP `frame-ancestors *` のみで許可する方式に修正。
+- **Session: cookie ドライバで `app.key` 未設定時に固定鍵で暗号化していた問題**: 全インストール共通の鍵となり暗号化が事実上無意味だったため、未設定時は例外を投げて起動を止めるように変更。
+
 ### Changed
+- **CORS: ワイルドカード許可時は `Access-Control-Allow-Origin: *` を返し、`Access-Control-Allow-Credentials` を送らないように変更**（旧実装はリクエスト Origin をエコーしており、全オリジンに Cookie 付きアクセスを許可していた）。
+- **Connection: MySQL の sql_mode をサーバ設定のまま尊重するように変更**（旧実装は無条件に非 STRICT へ上書き）。
+- **Logger: uid の取得を受動化**: ログ出力が `Auth::check()`（セッション開始・remember 復元の DB クエリ）を駆動しないように。`Engine::error()` の `Auth::check()` 呼び出しも削除。
+- **Engine: 明示ルート（`Route::get` 等）も自動ルーティングと同じ解決順（`_post_xxx` → 素のメソッド）と `isRoutable` チェックを通るように統一**。401→ログインリダイレクト処理を `executeAction()` に集約。
+- **グローバル定数（APP_NAME, LOGIN_PAGE, CSRF_TOKEN_NAME 等）を後方互換用に格下げ**: `!defined()` ガード付きで定義は継続するが、フレームワーク内部は Env を直接参照（CSRF 名は `Security::csrfTokenName()/csrfHeaderName()` に一元化）。
+- **Form: 入力ソースを `Request::allInputs()`（GET + POST + JSON）に統一**: コンストラクタ・`fromRequest()` とも。`fromRequest()` から `$_REQUEST` 由来の Cookie 混入がなくなった。
+- **Paginated: `isEmpty()` を Collection と同じ「現在ページの行」基準に変更**（全体の有無は `->total` で判定）。
+- **Response: `ok()` は `raw()` への委譲に、`emitView`/`emitViewRaw` は共通の `finishView()` に統合**。
+- **Message: 統一メッセージ API へ刷新（Toast 廃止）**:
+    - 1 メッセージ = `{type, text, field, title, options, time}` に統一。`field` 付きはフォームフィールド向け、`field` なしはグローバルメッセージ。
+    - 取得 API を拡充: `all()`, `byType($type)`, `errors()`, `globals()`, `has($type?)`, `field($f)`, `fieldAll($f)`, `hasField($f)`, `clear()`。
+    - 未使用だった Toast 系（`toast()`, `getToasts()`, `successToast` 等4ショートカット, `KEY_TOASTS`）を削除。浮遊表示は view/CSS の責務とする。
+    - `get()` は非推奨の互換シムとして残置（先頭グローバルメッセージを旧 `'message'` キー併載で返す）。
+    - ショートカット（`success/error/warning/info`）は第2引数に `?string $field` を追加（既存の1引数呼び出しは互換）。
+- **Form: エラー管理を Message と統合**:
+    - 内部エラー形を `[field => [msg, ...]]` に統一（フィールド未指定は `ERROR_GLOBAL` キー）。
+    - `toMessage(?string $summary)` を新設: 全エラーを field 情報を維持したまま `Message` へ送出。`flashError()` は削除（field 情報を捨てていたため）。
+    - `getErrors(?string $key)` がフィールド指定に対応。`firstError(?string $key)` を新設。
+    - バグ修正: `getError(): string` が配列を返して TypeError になり得た問題（メソッド自体を削除し `firstError()` へ）。
+    - バグ修正: `FormRender::hasError()/error()` が存在しないシグネチャ `getErrors($key)` を呼び、常に全エラーを参照していた問題。
+- **helpers: `err()` の修正と `hasErr()` の追加**:
+    - `err($key)` を `Message::field()` ベースに修正（旧実装は未設定の `global $form` 参照で機能していなかった）。
+    - `hasErr($key)` を新設: フィールドエラーがあれば CSS クラス文字列を返す。
+- **Db: リレーション API を `rel` / `relMany` に統一**:
+    - 宣言側（Query）: `with()` → `rel()`, `withMany()` → `relMany()`。
+    - 取得側（Entity）: `related()` → `rel()`, `relatedList()` → `relMany()`。
+    - Entity の静的ショートカット（旧 `Kengaku::with(...)` 相当）は削除。PHP は同名の static / instance メソッドを併存できないため、宣言は `Kengaku::query()->rel(...)` 経由に統一。
+    - 宣言と取得が同名の対称 API となり、N:1 は `rel`（`?Entity`）、1:N は `relMany`（`Collection`）で戻り値型が確定する。
+
 - **Request: input() メソッドへのパラメータ取得一本化と API スリム化**:
     - 全てのリクエストパラメータ（GET/POST/JSON）を安全にマージして取得する `Request::input()` 系の型付きメソッド（`inputInt`, `inputFloat`, `inputBool`, `inputArray`）を新設。
     - 組み合わせ爆発を起こしていた `param*`, `get*`, `post*` などの古いパラメータ取得メソッド群（計15メソッド）を完全に削除。

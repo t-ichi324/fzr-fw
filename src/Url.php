@@ -10,7 +10,7 @@ namespace Fzr;
  *
  * - Automatically prepends the `APP_BASE` path for portable installations.
  * - Supports relative and absolute URL generation.
- * - Simple static interface: `Url::to('/path')`, `Url::base()`.
+ * - Simple static interface: `Url::get('/path')`, `Url::root()`.
  */
 class Url
 {
@@ -119,12 +119,6 @@ class Url
     public static function isAbsolute(string $url): bool
     {
         return str_starts_with($url, '/') || preg_match('#^https?://#i', $url);
-    }
-
-    /** @see get() */
-    public static function to(...$parts): string
-    {
-        return self::get(...$parts);
     }
 
     /** 静的リソースURL（キャッシュバスト） */

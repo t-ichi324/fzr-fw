@@ -12,6 +12,9 @@ namespace Fzr;
  * - Automatically switches to Redis in stateless environments if available.
  * - Supports custom cache drivers via `setDriver()`.
  * - Includes a closure-based `get()` method that handles "get or set" logic atomically.
+ *
+ * 注意: 永続層は JSON 経由で保存するため、オブジェクトは復元時に連想配列になる。
+ * Entity 等をそのままキャッシュせず、配列やスカラに落としてから渡すこと。
  */
 class Cache
 {
@@ -58,7 +61,8 @@ class Cache
     {
         self::bootIfNeeded();
 
-        if (isset(self::$__memory[$key])) {
+        // isset だと null キャッシュが毎回ミス扱いになるため array_key_exists で見る
+        if (array_key_exists($key, self::$__memory)) {
             return self::$__memory[$key];
         }
 

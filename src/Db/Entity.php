@@ -11,7 +11,7 @@ use Fzr\HttpException;
  * Typical uses: persistent data models, business logic encapsulation, CRUD operations.
  *
  * - Extends {@see \Fzr\Model} to provide typed properties with DB persistence logic.
- * - Supports automatic model generation from database schema via `generateModels()`.
+ * - Supports automatic model generation from database schema via {@see ModelGenerator::generate()}.
  * - Provides simple CRUD methods (`save()`, `delete()`, `find()`).
  * - Uses PHP 8 Attributes (#[Table], #[Id], #[Column]) for schema mapping.
  *
@@ -24,6 +24,15 @@ abstract class Entity extends \Fzr\Model
     protected static ?string $primaryKey = 'id';
 
     private ?array $_original = null;
+
+    /**
+     * Eager Load（Query::rel()）されたリレーションの格納先
+     *
+     * _dynamicProperties とは分離して保持する。toArray()/getDirty() に
+     * 含まれないため、リレーションを持った Entity を save() しても
+     * UPDATE 対象へ漏れない。
+     */
+    private array $_relations = [];
 
     /** テーブル名取得 */
     public static function tableName(): string
@@ -47,13 +56,36 @@ abstract class Entity extends \Fzr\Model
     }
 
     /**
+     * デフォルトスコープ（サブクラスでオーバーライドして定義する）
+     *
+     * query() 起点のすべてのクエリ（find/where/all/count、Eager Load の
+     * リレーション先を含む）に自動適用される絞り込み。論理削除などに使う。
+     *
+     * 例:
+     * ```php
+     * protected static function defaultScope(Query $q): void {
+     *     // JOIN 時の列名衝突を避けるためテーブル修飾を推奨
+     *     $q->where(static::tableName() . '.is_deleted', 0);
+     * }
+     * ```
+     *
+     * 注意: スコープは UPDATE/DELETE にも効く。復元処理
+     * （is_deleted を 0 に戻す等）や削除済み一覧は必ず
+     * `query(scoped: false)` 経由で行うこと。`Db::table()` には適用されない。
+     */
+    protected static function defaultScope(Query $q): void {}
+
+    /**
      * クエリビルダ取得
      *
+     * @param  bool $scoped false でデフォルトスコープを適用しない
      * @return Query<static>
      */
-    public static function query(): Query
+    public static function query(bool $scoped = true): Query
     {
-        return (new Query(static::connection(), static::tableName()))->entity(static::class);
+        $q = (new Query(static::connection(), static::tableName()))->entity(static::class);
+        if ($scoped) static::defaultScope($q);
+        return $q;
     }
 
     /**
@@ -95,7 +127,7 @@ abstract class Entity extends \Fzr\Model
      *
      * @return static|null
      */
-    public static function first(string|array|\Closure $field, mixed $op = null, mixed $value = null): ?static
+    public static function first(string|array|\Closure $field, mixed $op = Query::OMITTED, mixed $value = Query::OMITTED): ?static
     {
         /** @var static|null */
         return static::where($field, $op, $value)->first();
@@ -106,7 +138,7 @@ abstract class Entity extends \Fzr\Model
      *
      * @return Query<static>
      */
-    public static function where(string|array|\Closure $field, mixed $op = null, mixed $value = null): Query
+    public static function where(string|array|\Closure $field, mixed $op = Query::OMITTED, mixed $value = Query::OMITTED): Query
     {
         return static::query()->where($field, $op, $value);
     }
@@ -144,9 +176,7 @@ abstract class Entity extends \Fzr\Model
         $id   = static::query()->insert($data);
 
         /** @var static */
-        return static::find($id) ?? static::query()
-            ->where(static::primaryKeyName(), $id)
-            ->first();
+        return static::find($id);
     }
 
     /**
@@ -275,5 +305,90 @@ abstract class Entity extends \Fzr\Model
         $pkVal = $this->pkValue();
         if ($pkVal === null) return null;
         return static::find($pkVal);
+    }
+
+    // =============================
+    // リレーション（Query::rel() / relMany() の紐づけ先）
+    // =============================
+
+    /**
+     * N:1 リレーション取得（rel() でロード済みのもの）
+     *
+     * クラスを渡すことで戻り値の型が確定し、IDE 補完と null セーフ演算子が使える:
+     * `$kengaku->rel(Shisetsu::class)?->name`
+     *
+     * @template TRel of Entity
+     * @param  class-string<TRel> $class
+     * @param  string|null        $as rel()/relMany() で as を指定した場合は同じ名前を渡す
+     * @return TRel|null 未ロード・該当なしは null
+     */
+    public function rel(string $class, ?string $as = null): ?Entity
+    {
+        $v = $this->_relations[$as ?? $class::tableName()] ?? null;
+        return $v instanceof $class ? $v : null;
+    }
+
+    /**
+     * 1:N リレーション取得（relMany() でロード済みのもの）
+     *
+     * `foreach ($kengaku->relMany(KengakuDay::class) as $day)` のように使う。
+     *
+     * @template TRel of Entity
+     * @param  class-string<TRel> $class
+     * @param  string|null        $as relMany() で as を指定した場合は同じ名前を渡す
+     * @return \Fzr\Collection<int, TRel> 未ロード時は空の Collection
+     */
+    public function relMany(string $class, ?string $as = null): \Fzr\Collection
+    {
+        $v = $this->_relations[$as ?? $class::tableName()] ?? null;
+        return $v instanceof \Fzr\Collection ? $v : \Fzr\Collection::make();
+    }
+
+    /** リレーション値を設定 */
+    public function setRelation(string $name, mixed $value): static
+    {
+        $this->_relations[$name] = $value;
+        return $this;
+    }
+
+    /** リレーション値を取得 */
+    public function getRelation(string $name): mixed
+    {
+        return $this->_relations[$name] ?? null;
+    }
+
+    /** リレーションがロード済みか */
+    public function relationLoaded(string $name): bool
+    {
+        return array_key_exists($name, $this->_relations);
+    }
+
+    public function __get(string $name): mixed
+    {
+        if (array_key_exists($name, $this->_relations)) return $this->_relations[$name];
+        return parent::__get($name);
+    }
+
+    public function __isset(string $name): bool
+    {
+        return isset($this->_relations[$name]) || parent::__isset($name);
+    }
+
+    public function __unset(string $name): void
+    {
+        unset($this->_relations[$name]);
+        parent::__unset($name);
+    }
+
+    /**
+     * JSON 化にはロード済みリレーションも含める（Collection は配列へ展開）
+     */
+    public function jsonSerialize(): mixed
+    {
+        $relations = array_map(
+            fn($v) => $v instanceof \Fzr\Collection ? $v->toArray() : $v,
+            $this->_relations
+        );
+        return array_merge($this->toArray(), $relations);
     }
 }

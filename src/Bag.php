@@ -28,11 +28,6 @@ abstract class Bag implements \JsonSerializable
         return new static($source);
     }
 
-    public function fill(array $data): static
-    {
-        return $this->merge($data);
-    }
-
     public function merge(array $data): static
     {
         $this->data = array_merge($this->data, $data);

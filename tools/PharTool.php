@@ -15,11 +15,6 @@ use RecursiveIteratorIterator;
  */
 class PharTool extends ToolBase
 {
-    public function description(): string
-    {
-        return 'Package the Fzr framework into a single fzr.phar file';
-    }
-
     public function execute(): int
     {
         if (ini_get('phar.readonly')) {

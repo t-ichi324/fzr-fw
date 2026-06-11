@@ -45,17 +45,8 @@ class Paginated extends Collection
             : ($this->total > 0 ? 1 : 0);
     }
 
-    /** 空判定（総件数ベース） */
-    public function isEmpty(): bool
-    {
-        return $this->total === 0;
-    }
-
-    /** 非空判定 */
-    public function isNotEmpty(): bool
-    {
-        return $this->total !== 0;
-    }
+    // isEmpty()/isNotEmpty() は Collection と同じ「現在ページの行」基準（範囲外ページは空扱い）。
+    // 検索結果全体の有無は ->total で判定すること。
 
     /** 前ページ存在判定 */
     public function hasPrev(): bool

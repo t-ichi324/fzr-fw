@@ -47,6 +47,13 @@ class Session extends Store
             ini_set('session.save_handler', 'redis');
             ini_set('session.save_path', "tcp://{$redisConf['host']}:{$redisConf['port']}");
         } elseif ($driver === 'cookie') {
+            // app.key が無いと全インストール共通の固定鍵になり暗号化が無意味になる
+            if (Env::get('app.key', '') === '') {
+                throw new \RuntimeException(
+                    "Session (cookie driver) requires 'app.key' to be set. "
+                        . "Add APP_KEY to .env (e.g. APP_KEY=" . bin2hex(random_bytes(16)) . ")."
+                );
+            }
             self::registerCookieHandler($name ?? session_name());
         } elseif ($driver === 'file') {
             $savePath = Env::get('session.save_path', Path::temp('sessions'));

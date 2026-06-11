@@ -13,11 +13,6 @@ use RecursiveIteratorIterator;
  */
 class BundleTool extends ToolBase
 {
-    public function description(): string
-    {
-        return 'Bundle the Fzr framework into a single fzr.php file (IDE friendly)';
-    }
-
     public function execute(): int
     {
         $rootPath = dirname(dirname(__FILE__));

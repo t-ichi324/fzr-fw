@@ -91,6 +91,13 @@ class Request
     {
         return self::_vg(self::allInputs(), $key, $default);
     }
+    
+    public static function inputStr(string $key, string $default = ''): string
+    {
+        // 配列が渡された場合（?key[]=x 等）は先頭要素に潰す
+        $v = DataHelper::ensureScalar(self::input($key));
+        return is_scalar($v) ? trim((string)$v) : trim($default);
+    }
 
     /** GET, POST, もしくは JSON ペイロードから配列値を取得 */
     public static function inputArray(string $key, array $default = []): array
@@ -365,28 +372,6 @@ class Request
         return str_contains(self::server('HTTP_ACCEPT') ?? '', 'application/json');
     }
 
-    /** ロボット判定 */
-    public static function isRobot(): bool
-    {
-        $ua = strtolower(self::server('HTTP_USER_AGENT'));
-        $bots = ['googlebot', 'bingbot', 'slurp', 'duckduckbot', 'baiduspider', 'yandex', 'sogou', 'exabot', 'facebot', 'ia_archiver'];
-        foreach ($bots as $bot) {
-            if (strpos($ua, $bot) !== false) return true;
-        }
-        return false;
-    }
-
-    /** モバイル判定 */
-    public static function isMobile(): bool
-    {
-        $ua = strtolower(self::server('HTTP_USER_AGENT'));
-        $mobiles = ['iphone', 'ipad', 'android', 'windows phone', 'blackberry', 'opera mini', 'iemobile', 'mobile'];
-        foreach ($mobiles as $m) {
-            if (strpos($ua, $m) !== false) return true;
-        }
-        return false;
-    }
-
     /** HTTPS判定 */
     public static function isHttps(): bool
     {
@@ -396,37 +381,4 @@ class Request
         return (strtolower($p) === 'https');
     }
 
-    /** ブラウザ名推測 */
-    public static function getBrowser(): string
-    {
-        $ua = self::server('HTTP_USER_AGENT');
-        if (strpos($ua, 'Chrome') !== false) return 'Chrome';
-        if (strpos($ua, 'Firefox') !== false) return 'Firefox';
-        if (strpos($ua, 'Safari') !== false) return 'Safari';
-        if (strpos($ua, 'Edge') !== false) return 'Edge';
-        if (strpos($ua, 'MSIE') !== false) return 'Internet Explorer';
-        return 'Unknown';
-    }
-
-    /** OS名推測 */
-    public static function getOS(): string
-    {
-        $ua = self::server('HTTP_USER_AGENT');
-        if (strpos($ua, 'Windows NT') !== false) return 'Windows';
-        if (strpos($ua, 'Macintosh') !== false) return 'Mac OS';
-        if (strpos($ua, 'Linux') !== false) return 'Linux';
-        if (strpos($ua, 'Android') !== false) return 'Android';
-        if (strpos($ua, 'iPhone') !== false) return 'iOS';
-        return 'Unknown';
-    }
-
-    /** デバイス型判定 */
-    public static function getDeviceType(): string
-    {
-        $ua = strtolower(self::server('HTTP_USER_AGENT'));
-        if (strpos($ua, 'ipad') !== false) return 'tablet';
-        if (strpos($ua, 'android') !== false && strpos($ua, 'mobile') === false) return 'tablet';
-        if (strpos($ua, 'iphone') !== false || (strpos($ua, 'android') !== false && strpos($ua, 'mobile') !== false)) return 'mobile';
-        return 'pc';
-    }
 }

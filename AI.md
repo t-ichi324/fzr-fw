@@ -72,9 +72,8 @@ GET  /login/login→ controller=login, action=login  → LoginController::login(
 | `src/Env.php` | `Env` | INI 読み込み・環境変数フォールバック |
 | `src/Context.php` | `Context` | 実行状態（Web/CLI/API/Debug モード） |
 | `src/Path.php` | `Path` | 物理パス管理 |
-| `src/Form.php` | `Form` | フォームデータ管理 |
+| `src/Form.php` | `Form` | フォームデータ・バリデーション管理 |
 | `src/FormValidator.php` | `FormValidator` | バリデーションロジック |
-| `src/FormRender.php` | `FormRender` | HTMLタグ生成 |
 | `src/Loader.php` | `Loader` | PSR-4 オートローダー＋コア依存の事前 require |
 | `src/Engine.php` | `Engine` | ブートストラップ・ディスパッチ |
 | `src/Route.php` | `Route` | ルーティング定義 |
@@ -90,9 +89,8 @@ GET  /login/login→ controller=login, action=login  → LoginController::login(
 | `src/Response.php` | `Response` | レスポンス生成 |
 | `src/Render.php` | `Render` | テンプレート描画 |
 | `src/Collection.php` | `Collection` | 汎用コレクション（ArrayAccess/IteratorAggregate/Countable） |
-| `src/Message.php` | `Message` | フラッシュメッセージ（Session依存） |
+| `src/Message.php` | `Message` | 統一メッセージ（グローバル/フィールド両対応・フラッシュ対応） |
 | `src/Url.php` | `Url` | URL生成 |
-| `src/Breadcrumb.php` | `Breadcrumb` | パンくずリスト（Url依存） |
 | `src/HttpException.php` | `HttpException` | HTTP例外（400/401/403/404/500等） |
 | `src/Security.php` | `Security` | CSRF検証・IP制限 |
 | `src/Storage.php` | `Storage` | ファイルストレージ（Local/GCS対応） |
@@ -104,14 +102,13 @@ GET  /login/login→ controller=login, action=login  → LoginController::login(
 
 | ファイル | クラス | 役割 |
 |---------|-------|------|
-| `src/Db/Db.php` | `Db` | DBスタティックファサード（`tables()`, `schema()`, `generateModels()` 含む） |
+| `src/Db/Db.php` | `Db` | DBスタティックファサード（`tables()`, `schema()` 含む。Entity 生成は `ModelGenerator::generate()`） |
 | `src/Db/Connection.php` | `Connection` | PDOラッパー（mysql/pgsql/sqlite） |
 | `src/Db/Query.php` | `Query` | クエリビルダー |
 | `src/Db/Paginated.php` | `Paginated` | 検索結果セット（`Collection` 継承） |
 | `src/Db/Entity.php` | `Entity` | ActiveRecord基底（`Model` 継承） |
 | `src/Db/Migration.php` | `Migration` | マイグレーション実行 |
-| `src/Db/LiteDb.php` | `LiteDb` | SQLiteファサード（`Db` への委譲） |
-| `src/Db/Vector.php` | `Vector` | pgvector対応（RAG用途） |
+| `contrib/Vector.php` | `Vector` | pgvector対応（RAG用途）。オプトイン: `Loader::add('vendor/fzr/fw/contrib')` で読み込む |
 
 ---
 
@@ -134,15 +131,15 @@ Fzr uses **Class Aliases** to reduce context overhead. All core classes are avai
 | `Controller` | Base. Hooks: `__before`, `__after`, `__finally` |
 | `AuthController` | (Removed) Use `#[Auth]` or `#[Roles]` attributes instead. |
 | `Auth` | `check()`, `login()`, `logout()`, `user()`, `userObject()`, `getId()`/`id()`, `getEmail()`/`mail()`, `getUsername()`/`username()`, `getRoles()`/`roles()`, `hasRole()`, `is()`, `isAdmin()`, `isGuest()`, `token()` |
-| `Message` | `success/error/warning/info($msg)`, `get()` → `['type','message']` |
-| `Request` | `input($key, $default)`, `inputInt/inputBool/inputFloat/inputArray`, `get/post/param (deprecated)`, `isPost()`, `isAjax()` |
-| `Response` | `view($tpl)`, `redirect($url)`, `json($data)`, `error($code)` |
+| `Message` | `success/error/warning/info($text, $field?)`, `all()`, `errors()`, `byType($t)`, `globals()`, `field($f)`, `hasField($f)`, `has($type?)` |
+| `Request` | `input($key, $default)`, `inputStr/inputInt/inputBool/inputFloat/inputArray`, `isPost()`, `isAjax()` |
+| `Response` | `view($tpl)`, `redirect($url)`, `json($data)`, `error($code)`, `setHeader($n,$v)`, `removeHeader($n)` |
 | `Render` | `setTitle($t)`, `setData($k,$v)`, `getData($k)` |
-| `Form` | Form validation + HTML generation — see section below |
+| `Form` | Form validation — see section below |
 | `FormValidator` | `rule()`, `required()`, `email()`, ..., `with(callable, ?string)` |
 | `Session` | `get/set/remove/flash/getFlash($key)`, `regenerate()` |
 | `Cookie` | `get/set/has/remove($key)` |
-| `Db` | `table($t)`, `select($sql,$p)`, `execute($sql,$p)`, `transaction($fn)`, `migrate()`, `tables()`, `schema($t)`, `generateModels($dir, $force, $tables)` |
+| `Db` | `table($t)`, `select($sql,$p)`, `execute($sql,$p)`, `transaction($fn)`, `migrate()`, `tables()`, `schema($t)` |
 | `Command` | `handle(): int` (実装必須), `line/info/success/warn/error($msg)`, `arg($n)`, `hasFlag($flag)`, `option($key)` |
 | `Entity` | ActiveRecord — see section below. `find($id): ?static`, `first($field, $val): ?static`, `where()->first()`, `all(): Collection<static>` |
 | `DbQuery` | Chainable query builder |
@@ -227,19 +224,20 @@ Auth::resolveRemember(function(string $token): ?object {
 
 ## Form Validation + HTML Generation
 
-`Form` wires together validation rules and HTML rendering. Model field attributes are auto-applied via `Form::from()`.
+`Form` handles validation rules and error management. Model field attributes are auto-applied via `Form::from()`.
 
 ```php
 // ── Controller ──────────────────────────────────────────
 // Option A: derive rules from Model attributes automatically
 $form = Form::from($user, ignore: ['id']);    // Use 'from' for Model or generic sources
 $form = Form::fromRequest();                  // Use 'fromRequest' for automatic HTTP data
-$form->fill(Request::post() ?: []);           // populate with POST data
+$form->bind(Request::post() ?: []);           // populate with POST data
 if (!$form->validate()) {
-    $form->flashError();                       // エラーをすべて Message::error() に送出
-    // $form->flashError('入力内容を確認してください。'); // 概括メッセージ1件にまとめる場合
+    $form->toMessage();                        // エラーをすべて Message へ送出（field 情報を維持）
+    // $form->toMessage('入力内容を確認してください。'); // 概括メッセージをグローバルに追加する場合
     return Response::redirect('user/create');
 }
+// view 側はリダイレクト/再表示を問わず Message::field('name') / err('name') / hasErr('name') で取得できる
 // バリデーション通過後、Modelへ書き戻す
 $user = new User();
 $form->sync($user);          // フォームのデータをモデルのプロパティに反映
@@ -365,6 +363,37 @@ $post->title = 'Updated'; $post->save();         // 全フィールドUPDATE
 $user = User::firstOrCreate(['email' => $email], ['name' => $name, 'password' => $hash]);
 ```
 
+### Default Scope（論理削除などの自動フィルタ）
+
+```php
+class Post extends Entity {
+    // query() 起点の全クエリ（find/where/all/count/Eager Load 先）に自動適用
+    protected static function defaultScope(Query $q): void {
+        $q->where(static::tableName() . '.is_deleted', 0);  // JOIN対応のためテーブル修飾を推奨
+    }
+}
+
+Post::all();                 // is_deleted = 0 が自動付与
+Post::find($id);             // 削除済みは null
+Post::query(scoped: false)->where('id', $id)->first();  // スコープ解除（削除済み一覧・復元用）
+```
+
+> **注意**: スコープは UPDATE/DELETE にも効く。復元（`is_deleted` を戻す等）は必ず `query(scoped: false)` 経由。`Db::table()` には適用されない。
+
+### Relations — rel / relMany（Eager Loading）
+
+```php
+// 宣言（Query 側）: N:1 は rel、1:N は relMany。WHERE IN の一括クエリで N+1 回避
+$posts = Post::query()->rel(User::class)->all();                  // post.user_id → user.id を自動推測
+$posts = Post::query()->relMany(Comment::class)->all();           // post.id ← comment.post_id を自動推測
+$posts = Post::query()->rel(User::class, 'id', 'author_id', as: 'author')->all();  // キー・名前を明示
+
+// 取得（Entity 側）: 宣言と同名で対称。戻り値型が確定する
+$post->rel(User::class)?->name;          // ?Entity（N:1）
+$post->relMany(Comment::class);          // Collection（1:N、未ロード時は空）
+$post->{'紐づけ名'};                      // as 指定時 or テーブル名で動的アクセスも可
+```
+
 ---
 
 ## Database — Raw / Facade
@@ -444,7 +473,6 @@ use Fzr\Attr\Http\{Csrf, Api, Roles, Guest, AllowCors, AllowCache, AllowIframe, 
 
 ```php
 h($str)            // HTML escape (always use in views)
-e($str)            // alias for h()
 url('path')        // Generate URL respecting base path
 env('key', 'def')  // Read config value (INI + env var)
 csrf_field()       // <input type="hidden" name="csrf_token" value="...">
@@ -582,7 +610,7 @@ assert(Post::find($id) !== null);
 - **セッション保存パス**: ローカル開発では `storage/temp/sessions/` が存在しないとセッションエラーになる場合がある。ディレクトリを事前に作成すること。
 - **Attributeの解決優先順位**: `#[Csrf]`・`#[Auth]` 等の属性は「Dispatchメソッド > Actionメソッド > Class」の順で解決されます。例えば、クラス全体に `#[Auth]` が付いていても、`index()` メソッド自体に属性がなければクラスの設定が適用されますが、もし `_get_index()` に別の属性を付ければそれが優先されます。
 - **Store の継承**: 独自のグローバルな状態を管理したい場合は `Store` を継承する。`$_allData` レジストリにより子クラス間でデータは混線しない。
-- **`Auth` の拡張性**: `Auth::getId()`, `Auth::getEmail()` は内部的に `Store::get()` を使用しており、`app.ini` の設定（`auth.user_id_name` 等）でキー名を変更可能。
+- **`Auth` の拡張性**: `Auth::id()`, `Auth::getEmail()` は内部的に `Store::get()` を使用しており、`app.ini` の設定（`auth.user_id_name` 等）でキー名を変更可能。
 - **`Auth` アトリビュート**: ログイン必須にするには、コントローラまたはメソッドに `#[Auth]` を付ける。
 
 ### ログイン機能実装時の注意
@@ -621,7 +649,6 @@ assert(Post::find($id) !== null);
 | `from($source)` | **新規生成**（`Model`/`Bag`） / **全入れ替え**（`Store`） | ✓ | ✓ | ✓ |
 
 - `Model`（プロパティベース）は `replace()` を持たない。プロパティに直接代入するか `Bag` を使う。
-- `Store::from()` はインスタンスを返さず `replace()` と同等（静的クラスのため）。
 
 ---
 
@@ -639,7 +666,7 @@ class ItemController extends Controller
     }
     // GET /item — 一覧
     public function index() {
-        $items = Item::where('user_id', Auth::getId())->orderBy('id', 'DESC')->all();
+        $items = Item::where('user_id', Auth::id())->orderBy('id', 'DESC')->all();
         Render::setTitle('一覧');
         Render::setData('items', $items);
         return Response::view('item/index');
@@ -655,14 +682,14 @@ class ItemController extends Controller
     #[Csrf]
     public function _post_create() {
         $form = Form::from(new Item(), ignore: ['id', 'user_id', 'created_at']);
-        $form->fill(Request::input());
+        $form->bind(Request::input());
         if (!$form->validate()) {
-            $form->flashError();
+            $form->toMessage();
             return Response::redirect('item/create');
         }
         $item = new Item();
         $form->sync($item);
-        $item->user_id = Auth::getId();
+        $item->user_id = Auth::id();
         $item->save();
         Message::success('登録しました。');
         return Response::redirect('item');
@@ -672,7 +699,7 @@ class ItemController extends Controller
     public function edit(int $id) {
         /** @var Item|null $item */
         $item = Item::find($id);
-        if (!$item || $item->user_id !== Auth::getId()) return Response::error(404);
+        if (!$item || $item->user_id !== Auth::id()) return Response::error(404);
         $form = Form::from($item, ignore: ['id', 'user_id', 'created_at']);
         Render::setData('form', $form);
         Render::setData('item', $item);
@@ -684,11 +711,11 @@ class ItemController extends Controller
     public function _post_edit(int $id) {
         /** @var Item|null $item */
         $item = Item::find($id);
-        if (!$item || $item->user_id !== Auth::getId()) return Response::error(404);
+        if (!$item || $item->user_id !== Auth::id()) return Response::error(404);
         $form = Form::from($item, ignore: ['id', 'user_id', 'created_at']);
-        $form->fill(Request::input());
+        $form->bind(Request::input());
         if (!$form->validate()) {
-            $form->flashError();
+            $form->toMessage();
             return Response::redirect("item/edit/{$id}");
         }
         $form->sync($item);
@@ -702,7 +729,7 @@ class ItemController extends Controller
     public function _post_delete(int $id) {
         /** @var Item|null $item */
         $item = Item::find($id);
-        if (!$item || $item->user_id !== Auth::getId()) return Response::error(404);
+        if (!$item || $item->user_id !== Auth::id()) return Response::error(404);
         $item->delete();
         Message::success('削除しました。');
         return Response::redirect('item');
@@ -720,7 +747,7 @@ class ApiItemController extends Controller
 {
     // GET /api-item — 一覧
     public function index() {
-        $items = Item::where('user_id', Auth::getId())->all();
+        $items = Item::where('user_id', Auth::id())->all();
         return Response::json(['items' => $items]);
     }
 
@@ -732,7 +759,7 @@ class ApiItemController extends Controller
         // JSON body は Request::input() で取得
         $name = Request::input('name', '');
         if ($name === '') return Response::json(['error' => 'name is required'], 422);
-        $id = Item::create(['name' => $name, 'user_id' => Auth::getId()]);
+        $id = Item::create(['name' => $name, 'user_id' => Auth::id()]);
         return Response::json(['id' => $id], 201);
     }
 }

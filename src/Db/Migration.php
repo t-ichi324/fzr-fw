@@ -55,7 +55,17 @@ class Migration {
             if (empty(trim($sql))) continue;
 
             try {
-                $pdo->exec($sql);
+                if ($this->connection->getDriver() === 'mysql') {
+                    // PDO mysql の exec() はマルチステートメントの2文目以降のエラーを
+                    // 返さないことがあるため、rowset を全部消化してエラーを表面化させる
+                    $stmt = $pdo->query($sql);
+                    while ($stmt->nextRowset()) {
+                        // consume
+                    }
+                    $stmt->closeCursor();
+                } else {
+                    $pdo->exec($sql);
+                }
                 $insert = $pdo->prepare("INSERT INTO _migrations (name) VALUES (:name)");
                 $insert->execute(['name' => $name]);
                 Logger::info("Migration executed: {$name}");

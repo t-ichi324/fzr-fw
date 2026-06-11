@@ -185,7 +185,7 @@ class Env
     /** 設定値出力 */
     public static function echo(string $key, string|null $defaultVal = null)
     {
-        echo htmlspecialchars(self::get($key, $defaultVal), ENT_QUOTES, defined('APP_CHARSET') ? APP_CHARSET : 'UTF-8');
+        echo htmlspecialchars((string)self::get($key, $defaultVal), ENT_QUOTES, self::get('app.charset', 'UTF-8'));
     }
 
     /** 環境判定 */

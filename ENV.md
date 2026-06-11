@@ -97,6 +97,7 @@ output = stderr ; Cloud Logging 等に構造化ログとして送る
 | `db.username` | ユーザー名 | - |
 | `db.password` | パスワード | - |
 | `db.sqlite_path` | SQLite使用時のファイルパス | `storage/db/app.db` |
+| `db.sql_mode` | MySQL: 指定時のみ `SET SESSION sql_mode` を発行（未指定はサーバ設定を尊重） | - |
 
 ## [storage] - ストレージ設定
 | キー | 説明 | デフォルト |
@@ -132,10 +133,13 @@ output = stderr ; Cloud Logging 等に構造化ログとして送る
 | キー | 説明 | デフォルト値 |
 | :--- | :--- | :--- |
 | `session.name` | セッションクッキー名 | `SID` |
+| `session.driver` | セッションドライバ (`file`, `redis`, `cookie`) | (環境に応じて自動) |
 | `session.save_path` | セッションファイルの保存場所 | `storage/temp/sessions` |
 | `session.domain` | クッキーの有効ドメイン | - |
 | `session.secure` | HTTPSのみに制限するか | (環境に応じて自動) |
 | `session.httponly` | JSからのアクセスを禁止するか | `true` |
+
+> **注意**: `cookie` ドライバはセッションデータを AES-256-GCM で暗号化してクッキーに保存するため、`app.key` の設定が**必須**。未設定の場合は起動時に例外となる。
 
 ## [security] - セキュリティ設定
 | キー | 説明 | デフォルト値 |

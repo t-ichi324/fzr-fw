@@ -27,6 +27,8 @@ class Connection
     protected ?string $password = null;
     protected ?string $charset = 'utf8mb4';
     protected ?string $timezone = null;
+    /** MySQL: 設定時のみ SET SESSION sql_mode を発行（未設定ならサーバ設定を尊重） */
+    protected ?string $sqlMode = null;
     protected ?string $schema = null;
     protected ?string $sqlitePath = null;
     protected ?string $socket = null;
@@ -118,7 +120,11 @@ class Connection
                     $stmt = $pdo->prepare("SET time_zone = ?");
                     $stmt->execute([$this->timezone]);
                 }
-                $pdo->exec("SET SESSION sql_mode = 'NO_ZERO_IN_DATE,NO_ZERO_DATE,NO_ENGINE_SUBSTITUTION'");
+                // sql_mode はサーバ設定を黙って上書きしない（db.sql_mode で明示した場合のみ変更）
+                if (!empty($this->sqlMode)) {
+                    $stmt = $pdo->prepare("SET SESSION sql_mode = ?");
+                    $stmt->execute([$this->sqlMode]);
+                }
             } elseif ($driver === 'pgsql') {
                 if ($this->charset) {
                     $encoding = $this->charset === 'utf8mb4' ? 'UTF8' : $this->charset;
@@ -214,6 +220,7 @@ class Connection
             'password'   => Env::get("{$prefix}.password", ''),
             'charset'    => Env::get("{$prefix}.charset", 'utf8mb4'),
             'timezone'   => Env::get("{$prefix}.timezone"),
+            'sqlMode'    => Env::get("{$prefix}.sql_mode"),
             'schema'     => Env::get("{$prefix}.schema"),
             'sqlitePath' => Env::get("{$prefix}.sqlite_path"),
             'socket'     => Env::get("{$prefix}.socket") ?: getenv('DB_SOCKET') ?: null,

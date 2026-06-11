@@ -108,26 +108,29 @@ class Engine
                 // デフォルトのセキュリティヘッダ
                 Response::setHeader('X-Frame-Options', 'SAMEORIGIN');
                 Response::setHeader('X-Content-Type-Options', 'nosniff');
-                Response::setHeader('X-XSS-Protection', '1; mode=block');
+                Response::setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
                 Response::setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
             }
 
-            define('APP_CHARSET', Env::get('app.charset', 'UTF-8'));
-            define('APP_LANG', Env::get('app.lang', 'ja'));
-            define('APP_NAME', Env::get('app.name', 'MyApp'));
-            define('LOGIN_PAGE', Env::get('app.login_page', 'login'));
-            define('DELIMITER', Env::get('app.delimiter', '-'));
-            define("REMEMBER_TOKEN", Env::get("session.remember_token", "rem"));
-            define("CSRF_TOKEN_NAME", Env::get('security.csrf_name', "csrf_token"));
-            define("CSRF_HEADER_NAME", Env::get('security.csrf_header', "X-CSRF-TOKEN"));
+            // 後方互換のためのグローバル定数（フレームワーク内部では Env を直接参照する）。
+            // アプリ側で先に define されていれば尊重する
+            if (!defined('APP_CHARSET'))        define('APP_CHARSET', Env::get('app.charset', 'UTF-8'));
+            if (!defined('APP_LANG'))           define('APP_LANG', Env::get('app.lang', 'ja'));
+            if (!defined('APP_NAME'))           define('APP_NAME', Env::get('app.name', 'MyApp'));
+            if (!defined('LOGIN_PAGE'))         define('LOGIN_PAGE', Env::get('app.login_page', 'login'));
+            if (!defined('DELIMITER'))          define('DELIMITER', Env::get('app.delimiter', '-'));
+            if (!defined('REMEMBER_TOKEN'))     define('REMEMBER_TOKEN', Env::get('session.remember_token', 'rem'));
+            if (!defined('CSRF_TOKEN_NAME'))    define('CSRF_TOKEN_NAME', Env::get('security.csrf_name', 'csrf_token'));
+            if (!defined('CSRF_HEADER_NAME'))   define('CSRF_HEADER_NAME', Env::get('security.csrf_header', 'X-CSRF-TOKEN'));
             date_default_timezone_set(Env::get('app.timezone', 'UTC'));
-            define('VIEW_TEMPLATE_BASE', Env::get("view.base_template", "@layouts/base.php"));
+            if (!defined('VIEW_TEMPLATE_BASE')) define('VIEW_TEMPLATE_BASE', Env::get('view.base_template', '@layouts/base.php'));
 
+            $charset = Env::get('app.charset', 'UTF-8');
             if (function_exists('mb_internal_encoding')) {
-                mb_internal_encoding(APP_CHARSET);
+                mb_internal_encoding($charset);
             }
             if (function_exists('mb_http_output')) {
-                mb_http_output(APP_CHARSET);
+                mb_http_output($charset);
             }
             register_shutdown_function([self::class, '__handleShutdown']);
 
@@ -153,22 +156,6 @@ class Engine
     public static function onShutdown(callable $callback): void
     {
         self::$_shutdownHandlers[] = $callback;
-    }
-
-    /** 致命的エラー出力 */
-    public static function criticalError(string $title, string $message): void
-    {
-        if (isset($_SERVER['HTTP_ACCEPT']) && strpos($_SERVER['HTTP_ACCEPT'], 'application/json') !== false) {
-            header('Content-Type: application/json; charset=UTF-8');
-            http_response_code(500);
-            echo json_encode(['error' => $title, 'message' => strip_tags($message)]);
-            exit;
-        }
-        http_response_code(500);
-        $safeTitle = htmlspecialchars($title, ENT_QUOTES, 'UTF-8');
-        $safeMessage = htmlspecialchars($message, ENT_QUOTES, 'UTF-8');
-        echo "<!DOCTYPE html><html><head><title>Critical Error</title></head><body><h1>{$safeTitle}</h1><p>{$safeMessage}</p></body></html>";
-        exit;
     }
 
     public static function autoload(...$dirs): void
@@ -315,46 +302,43 @@ class Engine
             }
             foreach ($tryList as $dispatchMethod) {
                 if (is_callable([$controller, $dispatchMethod])) {
-                    try {
-                        if (!$this->isRoutable($controller, $routeAction, $dispatchMethod)) {
-                            $this->error(404);
-                            return;
-                        }
-                        if (!$this->verifyAccess($controller, $routeAction, $dispatchMethod)) return;
-                        if (!$this->invokeBeforeAction($class, $routeAction, $dispatchMethod)) return;
-                        $ret = $this->invokeInner($controller, $routeAction, $dispatchMethod, $params);
-                        if (is_array($ret)) Response::handle($ret);
-                        elseif (is_string($ret)) Response::handle(Response::view($ret));
-                    } catch (HttpException $ex) {
-                        if ($ex->getCode() === 401 && Context::isWeb()) {
-                            Response::handle(Response::redirect(LOGIN_PAGE));
-                            return;
-                        }
-                        $this->error($ex);
+                    if (!$this->isRoutable($controller, $routeAction, $dispatchMethod)) {
+                        $this->error(404);
+                        return;
                     }
+                    $this->executeAction($controller, $class, $routeAction, $dispatchMethod, $params);
                     return;
                 }
             }
             if (method_exists($controller, '__id')) {
-                $dispatchMethod = '__id';
-                $params = array_merge([$routeAction], $params);
-                try {
-                    if (!$this->verifyAccess($controller, $routeAction, $dispatchMethod)) return;
-                    if (!$this->invokeBeforeAction($class, $routeAction, $dispatchMethod)) return;
-                    $ret = $this->invokeInner($controller, $routeAction, $dispatchMethod, $params);
-                    if (is_array($ret)) Response::handle($ret);
-                    elseif (is_string($ret)) Response::handle(Response::view($ret));
-                    return;
-                } catch (HttpException $ex) {
-                    $this->error($ex);
-                    return;
-                }
+                $this->executeAction($controller, $class, $routeAction, '__id', array_merge([$routeAction], $params));
+                return;
             }
             $this->error(404);
             return;
         }
         if (Tracer::isEnabled()) Tracer::add('framework', 'Route not found (auto)', null, ['candidates' => $traceCandidates]);
         $this->error(404);
+    }
+
+    /**
+     * アクション実行（verifyAccess → beforeAction → invoke → Response 処理、401 リダイレクトまで一括）
+     */
+    private function executeAction(Controller $controller, string $className, string $routeAction, string $dispatchMethod, array $params): void
+    {
+        try {
+            if (!$this->verifyAccess($controller, $routeAction, $dispatchMethod)) return;
+            if (!$this->invokeBeforeAction($className, $routeAction, $dispatchMethod)) return;
+            $ret = $this->invokeInner($controller, $routeAction, $dispatchMethod, $params);
+            if (is_array($ret)) Response::handle($ret);
+            elseif (is_string($ret)) Response::handle(Response::view($ret));
+        } catch (HttpException $ex) {
+            if ($ex->getCode() === 401 && Context::isWeb()) {
+                Response::handle(Response::redirect(Env::get('app.login_page', 'login')));
+                return;
+            }
+            $this->error($ex);
+        }
     }
 
     private function invokeBeforeAction(string $className, string $routeAction, string $dispatchMethod): bool
@@ -399,14 +383,13 @@ class Engine
             Tracer::add('error', "HTTP $code: $error", null, ['code' => $code]);
         }
 
-        Breadcrumb::clear();
+        Render::clearBreadcrumbs();
         Response::setStatusCode($code);
         $defaultTitle = $code . " " . HttpException::getErrorTitle($code);
         Render::setData("error", $error);
         if (Context::isDebug() && $debugEx !== null) {
             Render::setData("debug_exception", $debugEx);
         }
-        Auth::check();
         if (Context::isApi()) {
             header('Content-Type: application/json; charset=UTF-8');
             $payload = ["status" => "error", "code" => $code, "title" => $defaultTitle, "message" => $error];
@@ -461,7 +444,8 @@ class Engine
                 echo $content;
                 return;
             }
-            $vfile = (defined('VIEW_TEMPLATE_BASE') && VIEW_TEMPLATE_BASE) ? Path::view(VIEW_TEMPLATE_BASE) : '';
+            $base  = Env::get('view.base_template', '@layouts/base.php');
+            $vfile = $base ? Path::view($base) : '';
             if ($vfile !== '' && !file_exists($vfile) && !str_ends_with($vfile, '.php')) {
                 $vfile .= '.php';
             }
@@ -482,9 +466,29 @@ class Engine
             $methodParams = $refMethod->getParameters();
             $args = [];
             foreach ($methodParams as $i => $param) {
-                if (array_key_exists($i, $params)) $args[] = $params[$i];
-                elseif ($param->isDefaultValueAvailable()) $args[] = $param->getDefaultValue();
-                else $args[] = null;
+                if (array_key_exists($i, $params)) {
+                    $type = $param->getType();
+                    $val  = $params[$i];
+                    if ($type instanceof \ReflectionNamedType && !$type->allowsNull()) {
+                        $typeName = $type->getName();
+                        if ($typeName === 'int') {
+                            if (!ctype_digit(ltrim((string)$val, '-'))) return Response::error(404);
+                            $val = (int)$val;
+                        } elseif ($typeName === 'float') {
+                            if (!is_numeric($val)) return Response::error(404);
+                            $val = (float)$val;
+                        }
+                    }
+                    $args[] = $val;
+                } elseif ($param->isDefaultValueAvailable()) {
+                    $args[] = $param->getDefaultValue();
+                } else {
+                    $type = $param->getType();
+                    if ($type instanceof \ReflectionNamedType && !$type->allowsNull()) {
+                        return Response::error(404);
+                    }
+                    $args[] = null;
+                }
             }
             $ret = $refMethod->invokeArgs($controller, $args);
             if ($this->isMethodOverridden($controller, '__after')) {
@@ -527,7 +531,7 @@ class Engine
 
     protected function isRoutable($controller, string $routeAction, string $dispatchMethod): bool
     {
-        if (strpos($routeAction, '_') === 0 || strpos($routeAction, '__') === 0) return false;
+        if (strpos($routeAction, '_') === 0) return false;
         if (!empty($deny = $controller->__getProp("denyMethods")) && (in_array($routeAction, $deny, true) || in_array($dispatchMethod, $deny, true))) return false;
         return method_exists($controller, $dispatchMethod) && $this->refMethod($controller, $dispatchMethod)->isPublic();
     }
@@ -557,16 +561,19 @@ class Engine
             }
             $requestOrigin = Request::header('Origin');
             $allowOrigin = null;
-            if (in_array('*', $cors->origins)) {
-                $allowOrigin = $requestOrigin ?: '*';
-            } elseif (in_array($requestOrigin, $cors->origins)) {
+            $wildcard = in_array('*', $cors->origins, true);
+            if ($wildcard) {
+                $allowOrigin = '*';
+            } elseif ($requestOrigin && in_array($requestOrigin, $cors->origins, true)) {
                 $allowOrigin = $requestOrigin;
             }
             if ($allowOrigin) {
                 Response::setHeader('Access-Control-Allow-Origin', $allowOrigin);
                 Response::setHeader('Access-Control-Allow-Methods', $cors->methods);
                 Response::setHeader('Access-Control-Allow-Headers', $cors->headers);
-                if ($cors->credentials) {
+                // ワイルドカード許可時に credentials を付けると「全オリジンに Cookie 付き
+                // アクセス許可」になるため、オリジンを明示列挙したときだけ返す
+                if ($cors->credentials && !$wildcard) {
                     Response::setHeader('Access-Control-Allow-Credentials', 'true');
                 }
                 if (Request::method() === 'OPTIONS') {
@@ -598,7 +605,7 @@ class Engine
 
         if ($authAttr || $roleAttr) {
             if (!Auth::check()) {
-                $target = ($authAttr?->redirect) ?: LOGIN_PAGE;
+                $target = ($authAttr?->redirect) ?: Env::get('app.login_page', 'login');
                 Response::handle(Response::redirect($target));
                 return false;
             }
@@ -610,7 +617,8 @@ class Engine
             Response::setHeader('Cache-Control', "public, max-age={$cache->maxAge}");
         }
         if ($this->getAttr($refClass, $refAction, $refDispatch, \Fzr\Attr\Http\AllowIframe::class)) {
-            Response::setHeader('X-Frame-Options', 'ALLOWALL');
+            // 'ALLOWALL' は仕様に存在しない値。X-Frame-Options を送らず CSP のみで許可する
+            Response::removeHeader('X-Frame-Options');
             Response::setHeader('Content-Security-Policy', "frame-ancestors *");
         }
         return true;
@@ -691,18 +699,19 @@ class Engine
             $this->error(404);
             return;
         }
-        try {
-            if (!$this->verifyAccess($controller, $methodName, $methodName)) return;
-            if (!$this->invokeBeforeAction($className, $methodName, $methodName)) return;
-            $ret = $this->invokeInner($controller, $methodName, $methodName, $params);
-            if (is_array($ret)) Response::handle($ret);
-            elseif (is_string($ret)) Response::handle(Response::view($ret));
-        } catch (HttpException $ex) {
-            if ($ex->getCode() === 401 && Context::isWeb()) {
-                Response::handle(Response::redirect(LOGIN_PAGE));
+        // 自動ルーティングと同じ解決順（_post_xxx 等の HTTPメソッド付き → 素のメソッド）と
+        // isRoutable チェック（denyMethods / public 判定）を適用する
+        $httpMethod = strtolower(Request::method());
+        foreach (["_{$httpMethod}_{$methodName}", $methodName] as $dispatchMethod) {
+            if (is_callable([$controller, $dispatchMethod])) {
+                if (!$this->isRoutable($controller, $methodName, $dispatchMethod)) {
+                    $this->error(404);
+                    return;
+                }
+                $this->executeAction($controller, $className, $methodName, $dispatchMethod, $params);
                 return;
             }
-            $this->error($ex);
         }
+        $this->error(404);
     }
 }

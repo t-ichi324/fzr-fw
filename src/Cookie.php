@@ -19,14 +19,20 @@ class Cookie
         return $_COOKIE[$key] ?? $default;
     }
 
-    public static function set(string $key, string $value, int $expire = 0, string $path = '/', ?string $domain = null, ?bool $secure = null, ?bool $httpOnly = null, ?string $sameSite = null): bool
+    /**
+     * Cookie保存
+     *
+     * @param int $ttl 有効期間（秒）。0 はブラウザセッション限り、負値は削除。
+     *                 ※ 絶対UNIX時刻ではなく「今からの秒数」を渡すこと
+     */
+    public static function set(string $key, string $value, int $ttl = 0, string $path = '/', ?string $domain = null, ?bool $secure = null, ?bool $httpOnly = null, ?string $sameSite = null): bool
     {
         $secure = $secure ?? Env::getBool('cookie.secure', Request::isHttps());
         $httpOnly = $httpOnly ?? Env::getBool('cookie.httponly', true);
         $sameSite = $sameSite ?? Env::get('cookie.samesite', 'Lax');
 
         return setcookie($key, $value, [
-            'expires'  => $expire,
+            'expires'  => $ttl === 0 ? 0 : time() + $ttl,
             'path'     => $path,
             'domain'   => $domain ?: Env::get('cookie.domain', ''),
             'secure'   => $secure,
@@ -37,7 +43,7 @@ class Cookie
 
     public static function remove(string $key, string $path = '/', ?string $domain = null): void
     {
-        self::set($key, '', time() - 3600, $path, $domain);
+        self::set($key, '', -3600, $path, $domain);
     }
 
     public static function has(string $key): bool

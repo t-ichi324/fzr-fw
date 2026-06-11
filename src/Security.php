@@ -15,18 +15,30 @@ namespace Fzr;
  */
 class Security
 {
+    /** CSRFトークンのフィールド名（Env 一元管理） */
+    public static function csrfTokenName(): string
+    {
+        return Env::get('security.csrf_name', 'csrf_token');
+    }
+
+    /** CSRFトークンのHTTPヘッダ名（Env 一元管理） */
+    public static function csrfHeaderName(): string
+    {
+        return Env::get('security.csrf_header', 'X-CSRF-TOKEN');
+    }
+
     /** CSRFトークン生成 */
     public static function generateCsrfToken(): string
     {
         $token = bin2hex(random_bytes(32));
-        Session::set(defined('CSRF_TOKEN_NAME') ? CSRF_TOKEN_NAME : 'csrf_token', $token);
+        Session::set(self::csrfTokenName(), $token);
         return $token;
     }
 
     /** CSRFトークン取得（なければ生成） */
     public static function getCsrfToken(): string
     {
-        $key = defined('CSRF_TOKEN_NAME') ? CSRF_TOKEN_NAME : 'csrf_token';
+        $key = self::csrfTokenName();
         if (!Session::has($key)) {
             return self::generateCsrfToken();
         }
@@ -35,11 +47,12 @@ class Security
 
     public static function verifyCsrf(): void
     {
-        $key = defined('CSRF_TOKEN_NAME') ? CSRF_TOKEN_NAME : 'csrf_token';
+        $key = self::csrfTokenName();
         $token = Request::input($key)
-            ?: Request::header(defined('CSRF_HEADER_NAME') ? CSRF_HEADER_NAME : 'X-CSRF-TOKEN');
+            ?: Request::header(self::csrfHeaderName());
 
         $session_token = Session::get($key);
+
 
         if (empty($token) || empty($session_token) || !hash_equals($session_token, $token)) {
             Logger::warning("CSRF validation failed", [
@@ -53,8 +66,7 @@ class Security
     /** CSRFトークンHTML hidden input */
     public static function csrfField(): string
     {
-        $key = defined('CSRF_TOKEN_NAME') ? CSRF_TOKEN_NAME : 'csrf_token';
-        return '<input type="hidden" name="' . h($key) . '" value="' . h(self::getCsrfToken()) . '">';
+        return '<input type="hidden" name="' . h(self::csrfTokenName()) . '" value="' . h(self::getCsrfToken()) . '">';
     }
 
     /** IP制限チェック */

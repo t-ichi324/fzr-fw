@@ -93,6 +93,32 @@ class Render
         self::$data = [];
     }
 
+    // ── パンくず（簡易データ保持のみ。HTML はアプリ側で組む） ──────────
+
+    /** @var array<int, array{label: string, url: ?string}> */
+    private static array $breadcrumbs = [];
+
+    /**
+     * パンくず階層を追加（url 省略はリンクなしの現在地扱い）
+     *
+     * コントローラで積み、ビューで breadcrumbs() を foreach して出力する。
+     */
+    public static function addBreadcrumb(string $label, ?string $url = null): void
+    {
+        self::$breadcrumbs[] = ['label' => $label, 'url' => $url !== null ? Url::get($url) : null];
+    }
+
+    /** @return array<int, array{label: string, url: ?string}> */
+    public static function breadcrumbs(): array
+    {
+        return self::$breadcrumbs;
+    }
+
+    public static function clearBreadcrumbs(): void
+    {
+        self::$breadcrumbs = [];
+    }
+
     /** コンテンツ設定 */
     public static function setContent(string $content)
     {
